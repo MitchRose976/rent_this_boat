@@ -51,6 +51,8 @@ next-env.d.ts
 
 *.venv/.gitignore
 
+echo "*" > .venv/.gitignore
+
 # Python cache files
 __pycache__/
 *.py[cod]
