@@ -49,3 +49,11 @@ next-env.d.ts
 # Ignore all .venv folders
 **/.venv/
 
+*.venv/.gitignore
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+backend/**/__pycache__/
+

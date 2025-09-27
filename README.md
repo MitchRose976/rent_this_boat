@@ -43,7 +43,7 @@ python 3.13
 Windows
 - open cmd terminal
 - python -m venv venv
-- venv/Scripts/activate.bat or call venv/Scripts/activate.bat
+- venv/Scripts/activate.bat OR call venv/Scripts/activate.bat OR source .venv/bin/activate
 - pip install --upgrade pip
 - pip install -r requirements.txt
 - uvicorn main:app --reload (--reload for auto-reload for code changes)
