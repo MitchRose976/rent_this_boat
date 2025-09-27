@@ -42,3 +42,10 @@ next-env.d.ts
 
 # docs
 /docs
+
+# Python virtual environment
+.venv/
+
+# Ignore all .venv folders
+**/.venv/
+
