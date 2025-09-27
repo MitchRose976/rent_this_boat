@@ -46,9 +46,7 @@ Windows
 - venv/Scripts/activate.bat OR call venv/Scripts/activate.bat OR call .venv/Scripts/activate OR source .venv/bin/activate
 - python -m pip install --upgrade pip
 - pip install -r requirements.txt
-- uvicorn main:app --reload (--reload for auto-reload for code changes)
-- OR uvicorn app.main:app --reload (points to app variable in app/main.py)
-- OR uvicorn app.main:app --reload --port 8000 (specific port)
+- To run: fastapi dev app/main.py
 
 
 
