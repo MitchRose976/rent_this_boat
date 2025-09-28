@@ -41,12 +41,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 python 3.13
 
 Windows
-- open cmd terminal
-- python -m venv .venv
-- venv/Scripts/activate.bat OR call venv/Scripts/activate.bat OR call .venv/Scripts/activate OR source .venv/bin/activate
-- python -m pip install --upgrade pip
-- pip install -r requirements.txt
-- To run: fastapi dev app/main.py
+- run start.bat from command line within root
 
 
 
