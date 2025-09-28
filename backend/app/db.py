@@ -1,27 +1,31 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from functools import lru_cache
-from pydantic import BaseSettings
+import asyncio
+from pymongo import AsyncMongoClient
+from pymongo.server_api import ServerApi
+from typing import Any, Dict
+from config import Settings
 
 
-class Settings(BaseSettings):
-mongodb_uri: str
-db_name: str
+async def main():
+    uri = Settings().mongo_uri
+    client: AsyncMongoClient[Dict[str, Any]] = AsyncMongoClient(
+        uri, server_api=ServerApi("1", strict=True, deprecation_errors=True)
+    )
+
+    try:
+        database = client.get_database("myNHL")
+        players = database.get_collection("players")
+
+        # Query for a movie that has the title 'Back to the Future'
+        query = {"playerInfo.playerId": 8479983}
+        player = await players.find_one(query)
+
+        print(player)
+
+        await client.close()
+
+    except Exception as e:
+        raise Exception("Unable to find the document due to the following error: ", e)
 
 
-class Config:
-env_prefix = ''
-env_file = '.env'
-
-
-@lru_cache()
-def get_settings() -> Settings:
-return Settings(
-mongodb_uri=os.environ.get('MONGODB_URI', ''),
-db_name=os.environ.get('DB_NAME', 'boat_rental'),
-)
-
-
-settings = get_settings()
-client = AsyncIOMotorClient(settings.mongodb_uri)
-db = client[settings.db_name]
+# Run the async function
+asyncio.run(main())

@@ -1,25 +1,28 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.auth import router as auth_router
-import os
-from dotenv import load_dotenv
+from functools import lru_cache
 
-load_dotenv()
+from fastapi import Depends, FastAPI
+from typing_extensions import Annotated
+
+from . import config
 
 app = FastAPI()
 
-origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',') if o.strip()]
 
-app.add_middleware(
-CORSMiddleware,
-allow_origins=origins,
-allow_credentials=True,
-allow_methods=["*"],
-allow_headers=["*"],
-)
+@lru_cache
+def get_settings():
+    return config.Settings()
 
-app.include_router(auth_router)
 
-@app.get('/')
-async def root():
-return {"ok": True}
+@app.get("/")
+def read_root():
+    return {"message": "Hello World"}
+
+
+@app.get("/info")
+async def info(settings: Annotated[config.Settings, Depends(get_settings)]):
+    return {
+        "app_name": settings.app_name,
+        "admin_email": settings.admin_email,
+        "items_per_user": settings.items_per_user,
+        "mongo_uri": settings.mongo_uri
+    }
