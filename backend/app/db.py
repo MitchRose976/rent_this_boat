@@ -2,10 +2,11 @@ import asyncio
 from pymongo import AsyncMongoClient
 from pymongo.server_api import ServerApi
 from typing import Any, Dict
+from config import Settings
 
 
 async def main():
-    uri = "mongodb+srv://cheech976:James1996@cluster0.kvrql.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    uri = Settings().mongo_uri
     client: AsyncMongoClient[Dict[str, Any]] = AsyncMongoClient(
         uri, server_api=ServerApi("1", strict=True, deprecation_errors=True)
     )

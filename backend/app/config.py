@@ -8,4 +8,4 @@ class Settings(BaseSettings):
     mongo_uri: str = "mongodb://localhost:27017/rentthisboat"
 
     class Config:
-        env_file = "../.env"  # Path to your .env file
+        env_file = "../.env"
