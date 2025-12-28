@@ -26,8 +26,8 @@ class User(Document):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     email: Indexed(EmailStr, unique=True)
     password_hash: str
-    first_name: str = Field(..., min_length=1, max_length=50)
-    last_name: str = Field(..., min_length=1, max_length=50)
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: str = Field(min_length=1, max_length=50)
     role: UserRole = UserRole.CUSTOMER
     is_active: bool = True
     is_verified: bool = False
@@ -48,6 +48,7 @@ class User(Document):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
+        json_encoders={datetime: lambda v: v.isoformat()},
         json_schema_extra={
             "example": {
                 "name": "Jane Doe",
@@ -93,6 +94,3 @@ class User(Document):
     def update_last_login(self):
         self.last_login = datetime.utcnow()
         self.updated_at = datetime.utcnow()
-
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
