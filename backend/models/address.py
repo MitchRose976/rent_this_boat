@@ -1,5 +1,7 @@
+from decimal import Decimal
 from enum import Enum
-from typing import Optional, Literal
+import re
+from typing import Annotated, Optional, Literal
 
 from beanie import Document
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -83,67 +85,82 @@ class Address(BaseModel):
     """Address model that handles both US and Canadian formats"""
 
     # Free-form address lines
-    address_line1: str = Field(min_length=1, max_length=200)
-    address_line2: Optional[str] = Field(
-        None, max_length=200, description="Apartment, suite, unit, etc."
-    )
-    unit: Optional[str] = Field(
-        None,
-        max_length=50,
-        description="Short unit identifier (alternate to address_line2)",
-    )
+    address_line1: Annotated[
+        str, Field(min_length=1, max_length=200, description="Street address line 1")
+    ]
+    address_line2: Annotated[
+        str | None, Field(max_length=200, description="Apartment, suite, unit, etc.")
+    ] = None
+    unit: Annotated[
+        str | None,
+        Field(
+            max_length=10,
+            description="Short unit identifier (alternate to address_line2)",
+        ),
+    ] = None
 
     # Structured locality
-    city: str = Field(min_length=1, max_length=100)
-    state_province: str = Field(min_length=1, max_length=50)
-    postal_code: str = Field(min_length=2, max_length=20)
-    country: CountryCode = Field(description="ISO country code")
+    city: Annotated[str, Field(min_length=1, max_length=100, description="City")]
+    state_province: Annotated[
+        str, Field(min_length=1, max_length=20, description="State or Province")
+    ]
+    postal_code: Annotated[
+        str, Field(min_length=5, max_length=10, description="ZIP or Postal Code")
+    ]
+    country: Annotated[CountryCode, Field(description="ISO country code")]
 
     # Optional extras useful for mapping/search
-    latitude: Optional[float] = Field(None, description="Decimal degrees")
-    longitude: Optional[float] = Field(None, description="Decimal degrees")
+    latitude: Annotated[
+        Optional[Decimal], Field(description="Latitude - Decimal degrees")
+    ] = None
+    longitude: Annotated[
+        Optional[Decimal], Field(description="Longitude - Decimal degrees")
+    ] = None
 
     # Metadata
-    is_primary: bool = Field(
-        default=False, description="If true this is the user's primary address"
-    )
-    address_type: Literal["home", "work", "billing", "shipping", "other"] = Field(
-        default="home", description="Semantic address type"
-    )
+    is_primary: Annotated[
+        bool,
+        Field(description="If true this is the user's primary address"),
+    ] = False
+    address_type: Annotated[
+        Literal["home", "work", "billing", "shipping", "other"],
+        Field(description="Semantic address type"),
+    ] = "home"
 
+    # ------------------------------------------------ Validators ------------------------------------------------ #
     @field_validator("postal_code")
     def validate_postal_code(cls, v, info):
         """Validate postal code format based on country (if provided)."""
         country = info.data.get("country")
         if country == CountryCode.US:
             # US ZIP code: 12345 or 12345-6789
-            import re
-
             if not re.match(r"^\d{5}(-\d{4})?$", v):
                 raise ValueError("US ZIP code must be in format 12345 or 12345-6789")
         elif country == CountryCode.CA:
             # Canadian postal code: A1A 1A1 or A1A1A1
-            import re
-
             if not re.match(r"^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$", v):
                 raise ValueError("Canadian postal code must be in format A1A 1A1")
             return v.upper()
         return v
 
+    @field_validator("state_province", mode="before")
+    def normalize_state_province(cls, v):
+        return v.upper() if isinstance(v, str) else v
+
     @field_validator("state_province")
     def validate_state_province(cls, v, info):
         """Validate and normalize state/province based on country."""
         country = info.data.get("country")
-        value = v.upper()
         if country == CountryCode.US:
-            if value not in STATES:
+            if v not in STATES:
                 # Allow full names? You could implement a mapping, but keep strict for now.
                 raise ValueError(f"Invalid US state code: {v}")
         elif country == CountryCode.CA:
-            if value not in PROVINCES:
+            if v not in PROVINCES:
                 raise ValueError(f"Invalid Canadian province code: {v}")
-        return value
+        return v
 
+    # ------------------------------------------------ Methods ------------------------------------------------ #
     def formatted(self) -> str:
         """Return a simple single-line formatted address for display."""
         parts = [self.address_line1]

@@ -1,16 +1,12 @@
 from typing_extensions import Annotated
-from beanie import Document, Indexed
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
+from beanie import Document, Indexed, Replace, Save, before_event
+from pydantic import ConfigDict, EmailStr, Field
 from pydantic.functional_validators import BeforeValidator
-from datetime import datetime
+from datetime import datetime, date, timezone
 from typing import Optional, Literal
 from enum import Enum
 
 from backend.models.address import Address, CountryCode
-
-# Represents an ObjectId field in the database.
-# It will be represented as a `str` on the model so that it can be serialized to JSON.
-PyObjectId = Annotated[str, BeforeValidator(str)]
 
 
 class UserRole(str, Enum):
@@ -20,38 +16,49 @@ class UserRole(str, Enum):
 
 
 class User(Document):
-    # The primary key for the StudentModel, stored as a `str` on the instance.
-    # This will be aliased to ``_id`` when sent to MongoDB,
-    # but provided as ``id`` in the API requests and responses.
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    email: Indexed(EmailStr, unique=True)
+    email: Annotated[
+        EmailStr,
+        Field(description="User email address"),
+        Indexed(unique=True),
+    ]
     password_hash: str
-    first_name: str = Field(min_length=1, max_length=50)
-    last_name: str = Field(min_length=1, max_length=50)
-    role: UserRole = UserRole.CUSTOMER
-    is_active: bool = True
-    is_verified: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_login: Optional[datetime] = None
+    first_name: Annotated[
+        str, Field(min_length=1, max_length=50, description="First name")
+    ]
+    last_name: Annotated[
+        str, Field(min_length=1, max_length=50, description="Last name")
+    ]
+    # TODO: perhaps remove the default role of CUSTOMER?
+    role: Annotated[UserRole, Field(description="Role of the user in the system")] = (
+        UserRole.CUSTOMER
+    )
+    is_active: Annotated[bool, Field(description="Is the user active?"), Indexed()] = (
+        True
+    )
+    is_verified: Annotated[
+        bool, Field(description="Is the user verified?"), Indexed()
+    ] = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_login: Annotated[
+        Optional[datetime], Field(description="Last login timestamp")
+    ] = None
 
     # Profile information
-    phone: Optional[str] = Field(None, max_length=20)
-    date_of_birth: Optional[datetime] = None
-    profile_picture_url: Optional[str] = None
+    phone: Annotated[
+        Optional[str], Field(max_length=20, description="Phone number")
+    ] = None
+    date_of_birth: Annotated[date | None, Field(description="Date of birth")] = None
+    profile_picture_url: Annotated[
+        Optional[str], Field(description="Profile picture URL")
+    ] = None
 
     # Address information
-    address: Optional[Address] = None
+    address: Annotated[Optional[Address], Field(description="User address")] = None
 
-    # populate_by_name - allows the model to be initialized with 'id' OR '_id'
-    # arbitrary_types_allowed - allows the use of custom types like PyObjectId
     model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={datetime: lambda v: v.isoformat()},
         json_schema_extra={
             "example": {
-                "name": "Jane Doe",
                 "email": "jdoe@example.com",
                 "first_name": "Jane",
                 "last_name": "Doe",
@@ -77,13 +84,6 @@ class User(Document):
 
     class Settings:
         name = "users"  # Collection name in MongoDB
-        indexes = [
-            "email",  # Already indexed above
-            "role",
-            "is_active",
-            "is_verified",
-            "created_at",
-        ]
 
     def __str__(self):
         return f"User(email={self.email}, name={self.first_name} {self.last_name})"
@@ -92,5 +92,10 @@ class User(Document):
         return f"{self.first_name} {self.last_name}"
 
     def update_last_login(self):
-        self.last_login = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        now = datetime.now(timezone.utc)
+        self.last_login = now
+        self.updated_at = now
+
+    @before_event([Replace, Save])
+    def update_timestamp(self):
+        self.updated_at = datetime.now(timezone.utc)
