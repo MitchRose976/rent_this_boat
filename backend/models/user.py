@@ -1,12 +1,11 @@
 from typing_extensions import Annotated
 from beanie import Document, Indexed, Replace, Save, before_event
 from pydantic import ConfigDict, EmailStr, Field
-from pydantic.functional_validators import BeforeValidator
 from datetime import datetime, date, timezone
-from typing import Optional, Literal
+from typing import Optional
 from enum import Enum
 
-from backend.models.address import Address, CountryCode
+from models.address import Address, CountryCode
 
 
 class UserRole(str, Enum):
@@ -29,17 +28,25 @@ class User(Document):
         str, Field(min_length=1, max_length=50, description="Last name")
     ]
     # TODO: perhaps remove the default role of CUSTOMER?
-    role: Annotated[UserRole, Field(description="Role of the user in the system")] = (
-        UserRole.CUSTOMER
-    )
+    role: Annotated[
+        UserRole, Field(description="Role of the user in the system"), Indexed()
+    ] = UserRole.CUSTOMER
     is_active: Annotated[bool, Field(description="Is the user active?"), Indexed()] = (
         True
     )
     is_verified: Annotated[
         bool, Field(description="Is the user verified?"), Indexed()
     ] = False
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Annotated[
+        datetime,
+        Field(default_factory=lambda: datetime.now(timezone.utc)),
+        Indexed(),
+    ]
+    updated_at: Annotated[
+        datetime,
+        Field(default_factory=lambda: datetime.now(timezone.utc)),
+        Indexed(),
+    ]
     last_login: Annotated[
         Optional[datetime], Field(description="Last login timestamp")
     ] = None
@@ -60,9 +67,10 @@ class User(Document):
         json_schema_extra={
             "example": {
                 "email": "jdoe@example.com",
+                "password_hash": "$2b$12$abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqr",
                 "first_name": "Jane",
                 "last_name": "Doe",
-                "role": UserRole.CUSTOMER,
+                "role": "customer",
                 "is_active": True,
                 "is_verified": True,
                 "created_at": "2023-01-01T12:00:00Z",
@@ -72,11 +80,17 @@ class User(Document):
                 "date_of_birth": "1990-05-15",
                 "profile_picture_url": "https://example.com/profiles/jdoe.jpg",
                 "address": {
-                    "street_address": "123 Main St",
+                    "address_line1": "123 Main St",
+                    "address_line2": None,
+                    "unit": None,
                     "city": "Toronto",
                     "state_province": "ON",
                     "postal_code": "M4B 1B3",
-                    "country": CountryCode.CA,
+                    "country": "CA",
+                    "latitude": None,
+                    "longitude": None,
+                    "is_primary": True,
+                    "address_type": "home",
                 },
             }
         },
@@ -84,6 +98,9 @@ class User(Document):
 
     class Settings:
         name = "users"  # Collection name in MongoDB
+        indexes = [
+            [("is_active", 1), ("is_verified", 1)]
+        ]  # Compound/Composite index for active and verified users - avoids separate queries
 
     def __str__(self):
         return f"User(email={self.email}, name={self.first_name} {self.last_name})"

@@ -127,6 +127,24 @@ class Address(BaseModel):
         Field(description="Semantic address type"),
     ] = "home"
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "address_line1": "123 Main St",
+                "address_line2": "Suite 200",
+                "unit": "APT-5",
+                "city": "Toronto",
+                "state_province": "ON",
+                "postal_code": "M4B 1B3",
+                "country": "CA",
+                "latitude": "43.7182",
+                "longitude": "-79.2957",
+                "is_primary": True,
+                "address_type": "home",
+            }
+        },
+    )
+
     # ------------------------------------------------ Validators ------------------------------------------------ #
     @field_validator("postal_code")
     def validate_postal_code(cls, v, info):
