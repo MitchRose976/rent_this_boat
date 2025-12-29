@@ -64,6 +64,19 @@ class User(Document):
     address: Annotated[Optional[Address], Field(description="User address")] = None
 
     model_config = ConfigDict(
+        # Validation & coercion
+        # validate_assignment=True,  # Validate on field assignment
+        # validate_default=True,  # Validate default values
+        # tr_strip_whitespace=True,  # Auto-trim string whitespace
+        # Serialization
+        # ser_json_timedelta="float",  # How to serialize timedelta
+        # ser_json_inf_nan="constants",  # How to handle inf/nan
+        # Schema customization
+        # json_schema_extra={...},  # Add custom examples
+        # json_encoders={...},  # Custom JSON serialization
+        # Database/ORM
+        # from_attributes=True,  # Allow model.field syntax
+        # populate_by_name=True,  # Use field name or alias
         json_schema_extra={
             "example": {
                 "email": "jdoe@example.com",
