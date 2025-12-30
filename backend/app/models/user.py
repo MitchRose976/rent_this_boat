@@ -34,9 +34,10 @@ class User(Document):
     is_active: Annotated[bool, Field(description="Is the user active?"), Indexed()] = (
         True
     )
+    # TODO: change to default to False when email verification is implemented
     is_verified: Annotated[
-        bool, Field(description="Is the user verified?"), Indexed()
-    ] = False
+        bool, Field(description="Is the user email verified?"), Indexed()
+    ] = True
     created_at: Annotated[
         datetime,
         Field(default_factory=lambda: datetime.now(timezone.utc)),
