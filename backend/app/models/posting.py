@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
 
-from models.boat import Boat
-from models.address import Address
+from .boat import Boat
+from .address import Address
 
 
 class BoatType(str, Enum):
@@ -148,7 +148,10 @@ class Posting(Document):
                 "average_rating": 4.8,
                 "total_reviews": 12,
                 "features": ["GPS", "Life Jackets", "Cooler", "Fishing Rod"],
-                "images": ["https://example.com/boat1.jpg", "https://example.com/boat2.jpg"],
+                "images": [
+                    "https://example.com/boat1.jpg",
+                    "https://example.com/boat2.jpg",
+                ],
             }
         },
     )

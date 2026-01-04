@@ -5,7 +5,7 @@ from datetime import datetime, date, timezone
 from typing import Optional
 from enum import Enum
 
-from models.address import Address, CountryCode
+from .address import Address, CountryCode
 
 
 class UserRole(str, Enum):
