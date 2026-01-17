@@ -51,11 +51,11 @@ echo [STEP 2] OUTCOME: Pip upgraded successfully
 echo.
 
 REM === STEP 3: Install project dependencies ===
-REM Installs all required packages from requirements.txt using the venv Python
-echo [STEP 3] Installing dependencies from requirements.txt...
-".venv\Scripts\python.exe" -m pip install -r requirements.txt
+REM Installs all required packages from pyproject.toml using the venv Python
+echo [STEP 3] Installing dependencies from pyproject.toml...
+".venv\Scripts\python.exe" -m pip install -e .
 if errorlevel 1 (
-    echo [STEP 3] ERROR: Failed to install requirements
+    echo [STEP 3] ERROR: Failed to install dependencies
     pause
     exit /b 1
 )

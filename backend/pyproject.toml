@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app"]
+
+[project]
+name = "rent-this-boat"
+version = "0.1.0"
+description = "OAuth2 + PKCE authentication with boat rental management API"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Mitch Rose", email = "mitch.j.rose@outlook.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "fastapi==0.117.1",
+    "uvicorn==0.37.0",
+    "pymongo==4.15.5",
+    "beanie==2.0.1",
+    "pydantic==2.11.9",
+    "pydantic-settings==2.11.0",
+    "python-dotenv==1.1.1",
+    "passlib==1.7.4",
+    "python-multipart==0.0.20",
+    "email-validator==2.3.0",
+    "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0",
+    "isort>=5.12",
+    "flake8>=6.0",
+    "mypy>=1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | __pycache__
+  | \.pytest_cache
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip_gitignore = true
+known_first_party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
