@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI
 from typing_extensions import Annotated
 
 from .core import config
-from .db.db import init_db
+from .db.init import init_db
 from .auth import router as auth_router
 
 
