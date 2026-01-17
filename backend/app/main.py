@@ -1,15 +1,33 @@
+from functools import lru_cache
 from fastapi import Depends, FastAPI
 from typing_extensions import Annotated
 
-from . import config
-from .db import init_db
+from .core import config
+from .db.db import init_db
 from .auth import router as auth_router
 
 
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
-    await init_db()
-    yield
+    client = None
+    try:
+        client = await init_db()
+        await client.admin.command({"ping": 1})
+        print("Pinged your deployment. You successfully connected to MongoDB!")
+        print("Database initialized successfully. App started...")
+        yield
+
+    except Exception as e:
+        print("Error during app startup: ", e)
+        yield
+
+    finally:
+        print("App shutting down...")
+        if client is not None:
+            await client.close()
+            print("App shut down successfully and MongoDB connection closed...")
+        else:
+            print("App shut down (no MongoDB connection to close)...")
 
 
 app = FastAPI(
@@ -18,6 +36,12 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@lru_cache
+def get_settings():
+    return config.settings
+
 
 # Include auth routes
 app.include_router(auth_router)
@@ -30,7 +54,7 @@ def read_root():
 
 
 @app.get("/info")
-async def info(settings: Annotated[config.Settings, Depends(config.get_settings)]):
+async def info(settings: Annotated[config.Settings, Depends(get_settings)]):
     """Get application configuration info."""
     return {
         "app_name": settings.app_name,

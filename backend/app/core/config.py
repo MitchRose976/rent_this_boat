@@ -1,6 +1,9 @@
-from functools import lru_cache
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+env_path = Path(__file__).parent.parent.parent / ".env"
+print(f"[DEBUG] Looking for .env at: {env_path}")
+print(f"[DEBUG] .env exists: {env_path.exists()}")
 
 
 class Settings(BaseSettings):
@@ -12,10 +15,10 @@ class Settings(BaseSettings):
     mongo_db_password: str = "your_password"
 
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).parent.parent / ".env")
+        env_file=str(env_path),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
     )
 
 
-@lru_cache()
-def get_settings() -> Settings:
-    return Settings()
+settings = Settings()
