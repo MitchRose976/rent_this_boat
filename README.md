@@ -1,47 +1,144 @@
-## Frontend
+# Rent This Boat
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+A full-stack boat rental management platform built with modern technologies for secure authentication and seamless user experience.
 
-## Getting Started
+## Project Overview
 
-First, run the development server:
+**Rent This Boat** is a comprehensive platform that connects boat owners with renters. This repository contains both the frontend and backend components of the application.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Tech Stack
+
+- **Frontend**: [Next.js](https://nextjs.org/) with React and TypeScript
+- **Backend**: [FastAPI](https://fastapi.tiangolo.com/) with Python 3.11
+- **Database**: MongoDB Atlas
+- **Authentication**: OAuth2 + PKCE
+
+## 📁 Project Structure
+
+```
+rent-this-boat/
+├── frontend/          # Next.js React application
+├── backend/           # FastAPI Python API
+├── .gitignore        # Git ignore rules for both frontend and backend
+└── README.md         # This file
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🚀 Quick Start
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Frontend Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [Frontend README](./frontend/README.md) for detailed instructions.
 
-## Learn More
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+**Frontend runs on**: http://localhost:3000
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Backend Setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See [Backend README](./backend/README.md) for detailed instructions.
 
-## Deploy on Vercel
+#### Windows
+```bash
+cd backend
+./start.bat
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+#### macOS/Linux
+```bash
+cd backend
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Backend runs on**: http://127.0.0.1:8000
 
-## Backend
-python 3.13
+**API Documentation**: http://127.0.0.1:8000/docs (Swagger UI)
 
-Windows
-- run start.bat from command line within root
+## 📋 Prerequisites
+
+### Frontend
+- Node.js 18+ and npm
+
+### Backend
+- Python 3.11+
+- MongoDB Atlas account
+
+## 🔗 Integration
+
+The frontend communicates with the backend API at `http://127.0.0.1:8000`
+
+- Backend API endpoints are available at `/api/v1/*`
+- Authentication uses OAuth2 with PKCE flow
+- Session management through JWT tokens
+
+## 📚 Documentation
+
+For more detailed information, refer to:
+
+- **[Frontend Documentation](./frontend/README.md)** - React/Next.js setup, components, deployment
+- **[Backend Documentation](./backend/README.md)** - API setup, database, authentication, development
+
+## 🛠️ Development
+
+### Working on Frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+### Working on Backend
+
+```bash
+cd backend
+./start.bat          # Windows
+# or
+python -m uvicorn app.main:app --reload  # macOS/Linux
+```
+
+### Making Changes
+
+1. Create a feature branch: `git checkout -b feature/your-feature`
+2. Make your changes (frontend or backend)
+3. Test thoroughly
+4. Commit and push: `git push origin feature/your-feature`
+5. Create a Pull Request
+
+## 🐛 Troubleshooting
+
+### Frontend Issues
+- See [Frontend README](./frontend/README.md#troubleshooting)
+
+### Backend Issues
+- See [Backend README](./backend/README.md#troubleshooting)
+
+### Common Issues
+
+**Backend port already in use?**
+```powershell
+# Windows
+Get-NetTCPConnection -LocalPort 8000 | Stop-Process -Force
+
+# macOS/Linux
+lsof -ti:8000 | xargs kill -9
+```
+
+**MongoDB connection failed?**
+- Verify connection string in `backend/.env`
+- Check IP whitelisting in MongoDB Atlas
+- Ensure credentials are correct
+
+## 📝 License
+
+This project is proprietary and confidential.
+
+## 👤 Contact
+
+For questions or issues, contact: mitch.j.rose@outlook.com
+
 
 
 
