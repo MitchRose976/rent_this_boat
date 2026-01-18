@@ -1,28 +1,46 @@
 from functools import lru_cache
-
 from fastapi import Depends, FastAPI
 from typing_extensions import Annotated
 
-from . import config
-
-app = FastAPI()
-
-
-@lru_cache
-def get_settings():
-    return config.Settings()
+from .core import config
+from .db.init import init_db
+from .api.v1.home import router as home_router
+from .api.v1.auth import router as auth_router
 
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello World"}
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    client = None
+    try:
+        client = await init_db()
+        await client.admin.command({"ping": 1})
+        print("Pinged your deployment. You successfully connected to MongoDB!")
+        print("Database initialized successfully. App started...")
+        yield
+
+    except Exception as e:
+        print("Error during app startup: ", e)
+        yield
+
+    finally:
+        print("App shutting down...")
+        if client is not None:
+            await client.close()
+            print("App shut down successfully and MongoDB connection closed...")
+        else:
+            print("App shut down (no MongoDB connection to close)...")
 
 
-@app.get("/info")
-async def info(settings: Annotated[config.Settings, Depends(get_settings)]):
-    return {
-        "app_name": settings.app_name,
-        "admin_email": settings.admin_email,
-        "items_per_user": settings.items_per_user,
-        "mongo_uri": settings.mongo_uri
-    }
+app = FastAPI(
+    title="Rent This Boat API",
+    description="OAuth2 + PKCE authentication with boat rental management",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+route_prefix = "/api/v1"
+
+
+# Register routes
+app.include_router(home_router, prefix=route_prefix)
+app.include_router(auth_router, prefix=route_prefix)
