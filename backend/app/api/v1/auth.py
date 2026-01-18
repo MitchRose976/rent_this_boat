@@ -3,10 +3,10 @@
 from fastapi import APIRouter, status, HTTPException
 from datetime import datetime, timezone
 
-from ..models import User
-from .password import PasswordValidator
-from .utils import hash_password
-from .schemas import RegisterRequest, RegisterResponse, ErrorResponse
+from ...services.auth.utils import hash_password
+from ...services.auth.password_service import PasswordValidator
+from ...models.auth import ErrorResponse, RegisterRequest, RegisterResponse
+from ...models.user import User
 
 # Create router for auth endpoints
 router = APIRouter(

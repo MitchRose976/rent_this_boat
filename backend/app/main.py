@@ -4,7 +4,8 @@ from typing_extensions import Annotated
 
 from .core import config
 from .db.init import init_db
-from .auth import router as auth_router
+from .api.v1.home import router as home_router
+from .api.v1.auth import router as auth_router
 
 
 async def lifespan(app: FastAPI):
@@ -37,28 +38,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-@lru_cache
-def get_settings():
-    return config.settings
+route_prefix = "/api/v1"
 
 
-# Include auth routes
-app.include_router(auth_router)
-
-
-@app.get("/")
-def read_root():
-    """Root endpoint."""
-    return {"message": "Welcome to Rent This Boat API"}
-
-
-@app.get("/info")
-async def info(settings: Annotated[config.Settings, Depends(get_settings)]):
-    """Get application configuration info."""
-    return {
-        "app_name": settings.app_name,
-        "admin_email": settings.admin_email,
-        "items_per_user": settings.items_per_user,
-        "mongo_uri": settings.mongo_uri,
-    }
+# Register routes
+app.include_router(home_router, prefix=route_prefix)
+app.include_router(auth_router, prefix=route_prefix)
