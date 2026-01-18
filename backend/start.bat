@@ -8,16 +8,12 @@ echo Starting Rent This Boat backend...
 echo ============================================================
 echo.
 
-REM === STEP 0: Clean up any orphaned uvicorn processes ===
+REM === STEP 0: Clean up any orphaned processes on port 8000 ===
 REM This prevents port conflicts when the server wasn't stopped gracefully
-echo [STEP 0] Checking for orphaned uvicorn processes on port 8000...
-REM Use PowerShell for reliable port cleanup (we're already in PowerShell context)
-powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"
-if errorlevel 1 (
-    echo [STEP 0] OUTCOME: No processes found on port 8000
-) else (
-    echo [STEP 0] OUTCOME: Cleaned up port 8000
-)
+echo [STEP 0] Checking for processes on port 8000...
+powershell -NoProfile -Command "$proc = (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Select-Object -First 1); if($proc){Write-Host '[STEP 0] Found process holding port 8000 (PID:' $proc '). Terminating...'; Stop-Process -Id $proc -Force -ErrorAction SilentlyContinue; Write-Host '[STEP 0] Process terminated. Waiting for port release...'; Start-Sleep -Seconds 2} else {Write-Host '[STEP 0] No process found on port 8000'}"
+echo [STEP 0] OUTCOME: Port cleanup complete
+timeout /t 1 /nobreak >nul
 echo.
 
 REM === STEP 1: Check and create virtual environment with Python 3.11 ===
