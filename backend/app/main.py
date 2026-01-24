@@ -8,6 +8,13 @@ from .api.v1.home import router as home_router
 from .api.v1.auth import router as auth_router
 
 
+# ============================================================================
+# Application Lifespan Management
+# ============================================================================
+# Handles startup and shutdown events for the FastAPI application.
+# On startup: initializes the MongoDB connection and verifies connectivity.
+# On shutdown: gracefully closes the MongoDB connection.
+# ============================================================================
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     client = None
@@ -31,6 +38,15 @@ async def lifespan(app: FastAPI):
             print("App shut down (no MongoDB connection to close)...")
 
 
+# ============================================================================
+# FastAPI Application Instance
+# ============================================================================
+# Creates the main FastAPI application with metadata and lifespan management.
+# - title: API documentation title
+# - description: API documentation description
+# - version: semantic version of the API
+# - lifespan: context manager for app startup/shutdown events
+# ============================================================================
 app = FastAPI(
     title="Rent This Boat API",
     description="OAuth2 + PKCE authentication with boat rental management",
