@@ -7,12 +7,24 @@ print(f"[DEBUG] .env exists: {env_path.exists()}")
 
 
 class Settings(BaseSettings):
+    # Application Settings
     app_name: str = "Rent This Boat API"
     admin_email: str = "admin@rentthisboat.com"
     items_per_user: int = 50
+
+    # MongoDB Configuration
     mongo_uri: str = "mongodb://localhost:27017/rentthisboat"
     mongo_db_username: str = "your_username"
     mongo_db_password: str = "your_password"
+
+    # JWT Configuration
+    jwt_secret_key: str = ""  # Must be loaded from .env
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60
+    jwt_refresh_token_expire_days: int = 7
+
+    # Allowed JWT algorithms (not configurable via .env - security policy)
+    JWT_ALLOWED_ALGORITHMS: list[str] = ["HS256"]  # Only HS256 for single-service
 
     model_config = SettingsConfigDict(
         env_file=str(env_path),
