@@ -19,6 +19,8 @@ Flow:
 """
 
 import jwt
+import secrets
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import List
 from app.core.config import settings
@@ -56,7 +58,7 @@ class JWTService:
             token verification across multiple services.
         """
         self.secret_key = secret_key or settings.jwt_secret_key
-        self.algorithm = algorithm or settings.jwt_algorithm
+        self.algorithm = algorithm or settings.jwt_algorithm # TODO: move algorithm out of .env since security decisions should be in code, not config
         self.access_token_expire_minutes = (
             access_token_expire_minutes or settings.jwt_access_token_expire_minutes
         )
@@ -74,6 +76,17 @@ class JWTService:
                 f"Algorithm '{self.algorithm}' not allowed. "
                 f"Supported algorithms: {settings.JWT_ALLOWED_ALGORITHMS}."
             )
+
+    @staticmethod
+    def _generate_jti() -> str:
+        """
+        Generate a unique JWT ID (jti) using cryptographically secure randomness.
+
+        Returns:
+            URL-safe random string with ~256 bits of entropy.
+        """
+        return secrets.token_urlsafe(32)
+
 
     def create_access_token(
         self,
@@ -116,6 +129,7 @@ class JWTService:
             "scopes": scopes,
             "exp": int(expires_at.timestamp()),  # Unix timestamp
             "iat": int(now.timestamp()),  # Unix timestamp
+            "jti": self._generate_jti(),  # Unique token ID for revocation tracking
             "iss": "rent-this-boat-api",
             "aud": "rent-this-boat-client",
             "token_type": "access",
@@ -165,6 +179,7 @@ class JWTService:
             "scopes": [],  # refresh tokens don't have scopes
             "exp": int(expires_at.timestamp()),  # Unix timestamp
             "iat": int(now.timestamp()),  # Unix timestamp
+            "jti": self._generate_jti(),  # Unique token ID for revocation tracking
             "iss": "rent-this-boat-api",
             "aud": "rent-this-boat-client",
             "token_type": "refresh",
@@ -229,9 +244,9 @@ class JWTService:
                     "verify_exp": True,  # Verify expiration time
                 },
                 # Validate issuer (who created the token)
-                issuer="rent-this-boat-api",
+                issuer="rent-this-boat-api", # TODO: standardize issuer name
                 # Validate audience (who the token is for)
-                audience="rent-this-boat-client",
+                audience="rent-this-boat-client", # TODO: standardize audience name
             )
 
             # Validate payload structure and convert to typed model
@@ -330,6 +345,7 @@ if __name__ == "__main__":
     print(f"   Email: {payload.email}")
     print(f"   Scopes: {payload.scopes}")
     print(f"   Token Type: {payload.token_type}")
+    print(f"   Token ID (jti): {payload.jti}")
     print(f"   Expires: {payload.exp}\n")
 
     print("4. Extracting specific claims...")
