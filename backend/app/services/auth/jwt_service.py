@@ -58,7 +58,9 @@ class JWTService:
             token verification across multiple services.
         """
         self.secret_key = secret_key or settings.jwt_secret_key
-        self.algorithm = algorithm or settings.jwt_algorithm # TODO: move algorithm out of .env since security decisions should be in code, not config
+        self.algorithm = (
+            algorithm or settings.jwt_algorithm
+        )  # TODO: move algorithm out of .env since security decisions should be in code, not config
         self.access_token_expire_minutes = (
             access_token_expire_minutes or settings.jwt_access_token_expire_minutes
         )
@@ -86,7 +88,6 @@ class JWTService:
             URL-safe random string with ~256 bits of entropy.
         """
         return secrets.token_urlsafe(32)
-
 
     def create_access_token(
         self,
@@ -123,17 +124,17 @@ class JWTService:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(minutes=expires_in_minutes)
 
-        payload: JwtTokenPayload = {
-            "sub": user_id,  # RFC 7519: subject (principal)
-            "email": email,
-            "scopes": scopes,
-            "exp": int(expires_at.timestamp()),  # Unix timestamp
-            "iat": int(now.timestamp()),  # Unix timestamp
-            "jti": self._generate_jti(),  # Unique token ID for revocation tracking
-            "iss": "rent-this-boat-api",
-            "aud": "rent-this-boat-client",
-            "token_type": "access",
-        }
+        payload = JwtTokenPayload(
+            sub=user_id,  # RFC 7519: subject (principal)
+            email=email,
+            scopes=scopes,
+            exp=int(expires_at.timestamp()),  # Unix timestamp
+            iat=int(now.timestamp()),  # Unix timestamp
+            jti=self._generate_jti(),  # Unique token ID for revocation tracking
+            iss="rent-this-boat-api",  # TODO: standardize issuer name
+            aud="rent-this-boat-client",  # TODO: standardize audience name
+            token_type="access",
+        )
 
         # Encode the payload with secret key
         # jwt.encode() returns a string
@@ -173,17 +174,17 @@ class JWTService:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=expires_in_days)
 
-        payload: JwtTokenPayload = {
-            "sub": user_id,  # RFC 7519: subject (principal)
-            "email": email,
-            "scopes": [],  # refresh tokens don't have scopes
-            "exp": int(expires_at.timestamp()),  # Unix timestamp
-            "iat": int(now.timestamp()),  # Unix timestamp
-            "jti": self._generate_jti(),  # Unique token ID for revocation tracking
-            "iss": "rent-this-boat-api",
-            "aud": "rent-this-boat-client",
-            "token_type": "refresh",
-        }
+        payload = JwtTokenPayload(
+            sub=user_id,  # RFC 7519: subject (principal)
+            email=email,
+            scopes=[],  # refresh tokens don't have scopes
+            exp=int(expires_at.timestamp()),  # Unix timestamp
+            iat=int(now.timestamp()),  # Unix timestamp
+            jti=self._generate_jti(),  # Unique token ID for revocation tracking
+            iss="rent-this-boat-api",  # TODO: standardize issuer name
+            aud="rent-this-boat-client",  # TODO: standardize audience name
+            token_type="refresh",
+        )
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         return token
@@ -244,9 +245,9 @@ class JWTService:
                     "verify_exp": True,  # Verify expiration time
                 },
                 # Validate issuer (who created the token)
-                issuer="rent-this-boat-api", # TODO: standardize issuer name
+                issuer="rent-this-boat-api",  # TODO: standardize issuer name
                 # Validate audience (who the token is for)
-                audience="rent-this-boat-client", # TODO: standardize audience name
+                audience="rent-this-boat-client",  # TODO: standardize audience name
             )
 
             # Validate payload structure and convert to typed model
