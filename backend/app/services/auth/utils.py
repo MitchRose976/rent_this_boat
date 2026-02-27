@@ -39,8 +39,8 @@ def _get_password_context() -> CryptContext:
     [passlib]
     schemes = argon2
     deprecated =
-    argon2__memory_cost = 65536
-    argon2__time_cost = 3
+    argon2__memory_cost = 32768
+    argon2__time_cost = 4
     argon2__parallelism = 4
     """
     return CryptContext.from_string(default_config)

@@ -375,7 +375,7 @@ class OAuth2Client(Document):
     client_secret_hash: Annotated[
         str,
         Field(
-            description="Bcrypt hash of client secret (plaintext never stored)",
+            description="argon2 hash of client secret (plaintext never stored)",
         ),
     ]
     client_name: Annotated[
@@ -432,7 +432,7 @@ class OAuth2Client(Document):
         "json_schema_extra": {
             "example": {
                 "client_id": "web-app-frontend",
-                "client_secret_hash": "$2b$12$OIX.NQPVJX2L.G...bcrypt_hash...",
+                "client_secret_hash": "$2b$12$OIX.NQPVJX2L.G...argon2_hash...",
                 "client_name": "Rent This Boat Web App",
                 "redirect_uris": [
                     "https://localhost:3000/auth/callback",
