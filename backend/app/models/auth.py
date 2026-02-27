@@ -58,7 +58,6 @@ class RegisterResponse(BaseModel):
     """Schema for successful registration response."""
 
     message: str
-    user_id: str
     email: str
     first_name: str
     last_name: str
@@ -67,7 +66,6 @@ class RegisterResponse(BaseModel):
         "json_schema_extra": {
             "example": {
                 "message": "Registration successful! You can now login.",
-                "user_id": "507f1f77bcf86cd799439011",
                 "email": "john.doe@example.com",
                 "first_name": "John",
                 "last_name": "Doe",

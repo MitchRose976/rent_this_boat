@@ -89,7 +89,6 @@ async def register(request: RegisterRequest) -> RegisterResponse:
     # Step 6: Return success response
     return RegisterResponse(
         message="Registration successful! You can now login.",
-        user_id=str(new_user.id),
         email=new_user.email,
         first_name=new_user.first_name,
         last_name=new_user.last_name,
