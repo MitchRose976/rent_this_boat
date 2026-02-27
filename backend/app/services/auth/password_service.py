@@ -72,23 +72,81 @@ class PasswordValidator:
             )
 
         # Check against common patterns
-        common_patterns = [
-            r"123",
-            r"abc",
-            r"qwerty",
-            r"password",
-            r"admin",
-            r"letmein",
-            r"welcome",
-            r"12345",
-            r"000000",
-        ]
 
-        for pattern in common_patterns:
-            if re.search(pattern, password, re.IGNORECASE):
-                return (
-                    False,
-                    "Password contains common patterns (avoid: 123, abc, password, etc.)",
-                )
+        # Expanded set of common passwords (whole-password match only)
+        common_passwords = {
+            "password",
+            "password1",
+            "password123",
+            "password1234",
+            "qwerty",
+            "qwerty123",
+            "qwertyuiop",
+            "letmein",
+            "welcome",
+            "admin",
+            "administrator",
+            "123456",
+            "1234567",
+            "12345678",
+            "123456789",
+            "1234567890",
+            "000000",
+            "111111",
+            "123123",
+            "abc123",
+            "iloveyou",
+            "trustno1",
+            "changeme",
+            "dragon",
+            "master",
+            "monkey",
+            "shadow",
+            "sunshine",
+            "football",
+            "baseball",
+            "soccer",
+            "test",
+            "test123",
+            "testtest",
+            "passw0rd",
+            "654321",
+            "superman",
+            "batman",
+            "pokemon",
+            "starwars",
+            "letmein123",
+            "welcome1",
+            "welcome123",
+            "admin123",
+            "admin1",
+            "root",
+            "root123",
+            "default",
+            "default123",
+            "guest",
+            "guest123",
+            "user",
+            "user123",
+            "mypassword",
+            "yourpassword",
+            "login",
+            "login123",
+            "access",
+            "access123",
+            "pw123456",
+            "pw12345",
+            "pw1234",
+            "pw123",
+            "pw1",
+            "pw",
+            "pwtest",
+        }
+
+        if password.lower() in common_passwords:
+            return (
+                False,
+                "Please choose a stronger password",
+            )
 
         return True, ""
