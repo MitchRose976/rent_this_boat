@@ -131,8 +131,8 @@ class JWTService:
             exp=int(expires_at.timestamp()),  # Unix timestamp
             iat=int(now.timestamp()),  # Unix timestamp
             jti=self._generate_jti(),  # Unique token ID for revocation tracking
-            iss="rent-this-boat-api",  # TODO: standardize issuer name
-            aud="rent-this-boat-client",  # TODO: standardize audience name
+            iss=settings.jwt_issuer,  # Use settings
+            aud=settings.jwt_audience,  # Use settings
             token_type="access",
         )
 
@@ -181,8 +181,8 @@ class JWTService:
             exp=int(expires_at.timestamp()),  # Unix timestamp
             iat=int(now.timestamp()),  # Unix timestamp
             jti=self._generate_jti(),  # Unique token ID for revocation tracking
-            iss="rent-this-boat-api",  # TODO: standardize issuer name
-            aud="rent-this-boat-client",  # TODO: standardize audience name
+            iss=settings.jwt_issuer,  # Use settings
+            aud=settings.jwt_audience,  # Use settings
             token_type="refresh",
         )
 
@@ -245,9 +245,9 @@ class JWTService:
                     "verify_exp": True,  # Verify expiration time
                 },
                 # Validate issuer (who created the token)
-                issuer="rent-this-boat-api",  # TODO: standardize issuer name
+                issuer=settings.jwt_issuer,  # Use settings
                 # Validate audience (who the token is for)
-                audience="rent-this-boat-client",  # TODO: standardize audience name
+                audience=settings.jwt_audience,  # Use settings
             )
 
             # Validate payload structure and convert to typed model

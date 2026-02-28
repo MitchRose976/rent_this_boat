@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
     jwt_refresh_token_expire_days: int = 7
+    jwt_issuer: str = "rent-this-boat-api"
+    jwt_audience: str = "rent-this-boat-client"
 
     # Allowed JWT algorithms (not configurable via .env - security policy)
     JWT_ALLOWED_ALGORITHMS: list[str] = ["HS256"]  # Only HS256 for single-service

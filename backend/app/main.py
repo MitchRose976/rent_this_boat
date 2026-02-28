@@ -1,12 +1,13 @@
 from functools import lru_cache
 from fastapi import Depends, FastAPI
 from typing_extensions import Annotated
+from fastapi.middleware.cors import CORSMiddleware
 
 from .core import config
 from .db.init import init_db
 from .api.v1.home import router as home_router
 from .api.v1.auth import router as auth_router
-
+from app.services.auth.jwt_service import JWTService
 
 # ============================================================================
 # Application Lifespan Management
@@ -56,7 +57,29 @@ app = FastAPI(
 
 route_prefix = "/api/v1"
 
+# CORS configuration
+origins = [
+    "http://localhost",
+    "http://localhost:3000",
+    "https://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register routes
 app.include_router(home_router, prefix=route_prefix)
 app.include_router(auth_router, prefix=route_prefix)
+
+def get_jwt_service() -> JWTService:
+    return JWTService()
+
+# Example usage in a route:
+# @app.get("/some-protected-endpoint")
+# async def protected(jwt_service: JWTService = Depends(get_jwt_service)):
+#     ...
