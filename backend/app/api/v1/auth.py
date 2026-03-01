@@ -2,6 +2,7 @@
 
 import secrets
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, status, HTTPException, Request, Query, Form
@@ -13,12 +14,15 @@ from slowapi.util import get_remote_address
 
 from ...services.auth.utils import hash_password, verify_password
 from ...services.auth.password_service import PasswordValidator
+from ...services.auth.jwt_service import JWTService
+from ...services.auth.pkce import verify_code_challenge
 from ...models.auth import (
     ErrorResponse,
     RegisterRequest,
     RegisterResponse,
     AuthorizationCode,
     OAuth2Client,
+    RefreshToken,
 )
 from ...models.user import User
 
@@ -78,7 +82,9 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
         )
 
     # Step 2: Check if email already exists (unique constraint)
-    existing_user = await User.find_one(User.email == request_body.email)
+    existing_user: Optional[User] = await User.find_one(
+        User.email == request_body.email
+    )
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -165,7 +171,7 @@ async def authorize_get(
     ),
 ) -> HTMLResponse:
     """
-    OAuth2 Authorization Endpoint — GET (RFC 6749 §4.1.1).
+    OAuth2 Authorization Endpoint — GET (renders login form).
 
     Standard flow:
     1. Client redirects user-agent to this endpoint with OAuth2 query params
@@ -182,7 +188,9 @@ async def authorize_get(
     # Step 1: Validate client_id
     # If client_id is invalid, MUST NOT redirect — show error page
     # ----------------------------------------------------------------
-    client = await OAuth2Client.find_one(OAuth2Client.client_id == client_id)
+    client: Optional[OAuth2Client] = await OAuth2Client.find_one(
+        OAuth2Client.client_id == client_id
+    )
     if not client:
         return templates.TemplateResponse(
             request,
@@ -247,7 +255,7 @@ async def authorize_get(
         )
         return RedirectResponse(url=f"{redirect_uri}?{params}", status_code=302)
 
-    # Step 5: Validate scopes (RFC 6749 §3.3)
+    # Step 5: Validate scopes
     if scope:
         requested_scopes = scope.split()
     else:
@@ -368,7 +376,9 @@ async def login(
     # Hidden form fields can be tampered with by the user, so we must
     # re-validate before trusting them for the redirect
     # ----------------------------------------------------------------
-    client = await OAuth2Client.find_one(OAuth2Client.client_id == client_id)
+    client: Optional[OAuth2Client] = await OAuth2Client.find_one(
+        OAuth2Client.client_id == client_id
+    )
     if not client or not client.is_active:
         return templates.TemplateResponse(
             request,
@@ -466,7 +476,7 @@ async def login(
     # Step 4: Authenticate user
     # Generic error prevents email enumeration
     # ----------------------------------------------------------------
-    user = await User.find_one(User.email == email)
+    user: Optional[User] = await User.find_one(User.email == email)
     if not user or not verify_password(password, user.password_hash):
         return await render_login_error("Invalid email or password.")
 
@@ -602,7 +612,9 @@ async def token_exchange(
     # ----------------------------------------------------------------
     # Step 2: Lookup authorization code in database
     # ----------------------------------------------------------------
-    auth_code_doc = await AuthorizationCode.find_one(AuthorizationCode.code == code)
+    auth_code_doc: Optional[AuthorizationCode] = await AuthorizationCode.find_one(
+        AuthorizationCode.code == code
+    )
 
     if not auth_code_doc:
         raise HTTPException(
@@ -665,8 +677,6 @@ async def token_exchange(
         )
 
     # Import PKCE verification function
-    from ...services.auth.pkce import verify_code_challenge
-
     if not verify_code_challenge(code_verifier, auth_code_doc.code_challenge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -701,7 +711,9 @@ async def token_exchange(
     # ----------------------------------------------------------------
     # Step 8: Lookup OAuth2Client to verify it's still active
     # ----------------------------------------------------------------
-    client = await OAuth2Client.find_one(OAuth2Client.client_id == client_id)
+    client: Optional[OAuth2Client] = await OAuth2Client.find_one(
+        OAuth2Client.client_id == client_id
+    )
     if not client or not client.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -715,13 +727,11 @@ async def token_exchange(
     # Step 9: Generate access token (60 min TTL, HS256, RFC 7519)
     # Includes user_id, email, scopes, jti (token ID for revocation)
     # ----------------------------------------------------------------
-    from ...services.auth.jwt_service import JWTService
-
     jwt_service = JWTService()
     access_token = jwt_service.create_access_token(
-        subject=str(user.id),
+        user.id,
+        email=user.email,
         scopes=auth_code_doc.scopes,
-        expires_delta=timedelta(minutes=60),
     )
 
     # ----------------------------------------------------------------
@@ -729,16 +739,14 @@ async def token_exchange(
     # Used to get new access tokens without re-authenticating
     # ----------------------------------------------------------------
     refresh_token = jwt_service.create_refresh_token(
-        subject=str(user.id),
-        expires_delta=timedelta(days=7),
+        user.id,
+        email=user.email,
     )
 
     # ----------------------------------------------------------------
     # Step 11: Store RefreshToken document for revocation/tracking
     # Allows us to invalidate refresh tokens if needed
     # ----------------------------------------------------------------
-    from ...models.auth import RefreshToken
-
     refresh_token_doc = RefreshToken(
         user_id=str(user.id),
         token=refresh_token,

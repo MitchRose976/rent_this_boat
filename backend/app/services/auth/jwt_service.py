@@ -138,7 +138,7 @@ class JWTService:
 
         # Encode the payload with secret key
         # jwt.encode() returns a string
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        token = jwt.encode(payload.model_dump(), self.secret_key, algorithm=self.algorithm)
         return token
 
     def create_refresh_token(
@@ -186,7 +186,7 @@ class JWTService:
             token_type="refresh",
         )
 
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        token = jwt.encode(payload.model_dump(), self.secret_key, algorithm=self.algorithm)
         return token
 
     def verify_token(self, token: str) -> JwtTokenPayload:

@@ -2,8 +2,6 @@ from decimal import Decimal
 from enum import Enum
 import re
 from typing import Annotated, Optional, Literal
-
-from beanie import Document
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PROVINCES = {
