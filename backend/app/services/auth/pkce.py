@@ -21,7 +21,7 @@ import hashlib
 import base64
 from typing import Tuple
 
-
+# TODO: Move to frontend
 def generate_code_verifier() -> str:
     """
     Generate a cryptographically secure code verifier for PKCE.
@@ -50,6 +50,7 @@ def generate_code_verifier() -> str:
     return code_verifier.rstrip("=")
 
 
+# TODO: Move to frontend
 def generate_code_challenge(code_verifier: str) -> str:
     """
     Generate a code challenge from a code verifier using SHA256.
