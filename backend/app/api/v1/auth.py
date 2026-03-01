@@ -1,17 +1,16 @@
 """Authentication endpoints for user registration, login, and token management."""
 
 import secrets
+import hashlib
 from pathlib import Path
 from typing import Optional
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
-
 from fastapi import APIRouter, status, HTTPException, Request, Query, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from datetime import datetime, timezone, timedelta
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
+from ...core.errors import AUTH_ERRORS
+from ...core.limiter import limiter
 from ...services.auth.utils import hash_password, verify_password
 from ...services.auth.password_service import PasswordValidator
 from ...services.auth.jwt_service import JWTService
@@ -23,8 +22,10 @@ from ...models.auth import (
     AuthorizationCode,
     OAuth2Client,
     RefreshToken,
+    TokenResponse,
 )
 from ...models.user import User
+
 
 # Create router for auth endpoints
 router = APIRouter(
@@ -32,8 +33,6 @@ router = APIRouter(
     tags=["authentication"],
     responses={400: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
 )
-
-limiter = Limiter(key_func=get_remote_address)
 
 # Jinja2 templates for server-rendered auth pages (login form, error page)
 # Templates live at backend/app/templates/
@@ -138,6 +137,7 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
 # Traditional OAuth2 flow using server-rendered login form:
 #   1. GET  /authorize  — validate OAuth2 params, render login form
 #   2. POST /login  — authenticate user, issue code, 302 redirect
+#   3. POST /token  — exchange code + PKCE proof for JWT tokens
 #
 # We use GET to serve the login form (as required by the spec) and POST
 # to process the form submission (credentials never appear in URLs).
@@ -148,12 +148,12 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
     summary="OAuth2 Authorization - Login Form",
     description=(
         "Validates OAuth2 + PKCE parameters and renders the authorization server's "
-        "login form. The client redirects the user-agent here with OAuth2 params as "
-        "query parameters (RFC 6749 §4.1.1, RFC 7636 §4.3)."
+        "login form. The client redirects the user here with OAuth2 params as "
+        "query parameters."
     ),
     include_in_schema=False,  # HTML page, not a JSON API — hide from OpenAPI docs
 )
-@limiter.limit("30/minute")
+@limiter.limit("5/minute")
 async def authorize_get(
     request: Request,
     response_type: str = Query(..., description="Must be 'code'"),
@@ -173,21 +173,37 @@ async def authorize_get(
     """
     OAuth2 Authorization Endpoint — GET (renders login form).
 
-    Standard flow:
-    1. Client redirects user-agent to this endpoint with OAuth2 query params
-    2. Server validates client_id, redirect_uri, response_type, PKCE params
-    3. Server renders HTML login form with OAuth2 params as hidden fields
-    4. User submits credentials via POST to the same endpoint
+    Validates:
+    - client_id exists and is active
+    - redirect_uri matches registered URIs for the client
+    - response_type == "code"
+    - code_challenge_method == "S256"
+    - requested scopes are allowed for the client
+    - state parameter is present (for CSRF protection)
+
+    Args:
+    - response_type: Must be "code" for authorization code flow
+    - client_id: Registered OAuth2 client identifier
+    - redirect_uri: Must match one of the client's registered redirect URIs
+    - code_challenge: PKCE code challenge from the client
+    - code_challenge_method: Must be "S256" (SHA256) for PKCE
+    - scope: Optional space-delimited scopes requested by the client
+    - state: Opaque value for CSRF protection, must be returned in the redirect
+
+    Returns:
+    - HTMLResponse with login form if validation passes
+
+    Raises:
+    - HTTPException 400: Invalid or missing parameters
+    - HTTPException 500: Server error during processing
 
     Error handling per RFC 6749 §4.1.2.1:
     - Invalid/missing client_id or redirect_uri → render error page (MUST NOT redirect)
     - Other errors → 302 redirect to redirect_uri with error query params
     """
 
-    # ----------------------------------------------------------------
     # Step 1: Validate client_id
     # If client_id is invalid, MUST NOT redirect — show error page
-    # ----------------------------------------------------------------
     client: Optional[OAuth2Client] = await OAuth2Client.find_one(
         OAuth2Client.client_id == client_id
     )
@@ -195,7 +211,7 @@ async def authorize_get(
         return templates.TemplateResponse(
             request,
             "error.html",
-            {"error": "invalid_request", "detail": "Unknown client_id."},
+            AUTH_ERRORS.unauthorized_client.to_dict(),
             status_code=400,
         )
 
@@ -203,41 +219,30 @@ async def authorize_get(
         return templates.TemplateResponse(
             request,
             "error.html",
-            {
-                "error": "unauthorized_client",
-                "detail": "This client has been deactivated.",
-            },
+            AUTH_ERRORS.unauthorized_client.to_dict(),
             status_code=400,
         )
 
-    # ----------------------------------------------------------------
     # Step 2: Validate redirect_uri
     # If redirect_uri is invalid, MUST NOT redirect — show error page
-    # Simple string comparison per RFC 3986 §6.2.1
-    # ----------------------------------------------------------------
     if redirect_uri not in client.redirect_uris:
         return templates.TemplateResponse(
             request,
             "error.html",
-            {
-                "error": "invalid_request",
-                "detail": "redirect_uri does not match any registered URI for this client.",
-            },
+            AUTH_ERRORS.invalid_request.to_dict(),
             status_code=400,
         )
 
-    # ----------------------------------------------------------------
     # From this point forward, client_id and redirect_uri are validated,
     # so errors are reported via 302 redirect to redirect_uri with
     # error query params
-    # ----------------------------------------------------------------
 
     # Step 3: Validate response_type
     if response_type != "code":
         params = urlencode(
             {
-                "error": "unsupported_response_type",
-                "error_description": "response_type must be 'code'.",
+                "error": AUTH_ERRORS.unsupported_response_type.type,
+                "error_description": AUTH_ERRORS.unsupported_response_type.description,
                 "state": state,
             }
         )
@@ -248,8 +253,8 @@ async def authorize_get(
     if code_challenge_method != "S256":
         params = urlencode(
             {
-                "error": "invalid_request",
-                "error_description": "code_challenge_method must be 'S256'.",
+                "error": AUTH_ERRORS.invalid_request.type,
+                "error_description": AUTH_ERRORS.invalid_request.description,
                 "state": state,
             }
         )
@@ -265,18 +270,16 @@ async def authorize_get(
     if invalid_scopes:
         params = urlencode(
             {
-                "error": "invalid_scope",
-                "error_description": f"Scopes not allowed: {', '.join(invalid_scopes)}",
+                "error": AUTH_ERRORS.invalid_scope.type,
+                "error_description": AUTH_ERRORS.invalid_scope.description,
                 "state": state,
             }
         )
         return RedirectResponse(url=f"{redirect_uri}?{params}", status_code=302)
 
-    # ----------------------------------------------------------------
     # Step 6: All OAuth2 params valid — render login form
     # Generate CSRF token: stored in httponly cookie + hidden form field
     # On POST, we compare them to prevent cross-site form submission
-    # ----------------------------------------------------------------
     csrf_token = secrets.token_urlsafe(32)
 
     response = templates.TemplateResponse(
@@ -322,7 +325,7 @@ async def authorize_get(
     ),
     include_in_schema=False,  # Form handler, not a JSON API
 )
-@limiter.limit("10/minute")  # Stricter rate limit — brute force protection
+@limiter.limit("5/minute")
 async def login(
     request: Request,
     # User credentials from form
@@ -340,18 +343,25 @@ async def login(
     csrf_token: str = Form(...),
 ):
     """
-    OAuth2 Authorization Endpoint — POST (form submission handler).
+    OAuth2 Authorization Endpoint — POST (login form submission handler).
 
-    Standard flow:
-    1. Verify CSRF token (cookie vs hidden field)
-    2. Re-validate OAuth2 params (hidden fields can be tampered with)
-    3. Authenticate user (email + password)
-    4. Generate authorization code (256-bit entropy, RFC 6749 §10.10)
-    5. Store AuthorizationCode with PKCE challenge (5 min TTL, RFC 7636 §4.4)
-    6. 302 redirect to redirect_uri?code=...&state=... (RFC 6749 §4.1.2)
+    Validates:
+    - CSRF token (cookie vs hidden form field)
+    - OAuth2 parameters (client_id, redirect_uri, response_type, PKCE params) for tampering
+    - User credentials (email + password)
 
-    On credential failure: re-render login form with error message.
-    On OAuth2 param errors: redirect with error params or show error page.
+    Args: Same as GET /authorize, but with email and password from the form
+
+    Returns:
+    - On success: 302 redirect to redirect_uri with authorization code and state
+
+    Raises:
+    - HTTPException 400: Invalid parameters or authentication failure (handled by re-rendering login form with error)
+    - HTTPException 500: Server error during processing (handled by rendering error page)
+
+    Error Handling:
+    - On credential failure: re-render login form with error message.
+    - On OAuth2 param errors: redirect with error params or show error page.
     """
 
     # ----------------------------------------------------------------
@@ -364,10 +374,7 @@ async def login(
         return templates.TemplateResponse(
             request,
             "error.html",
-            {
-                "error": "invalid_request",
-                "detail": "CSRF validation failed. Please try again.",
-            },
+            AUTH_ERRORS.invalid_request.to_dict(),
             status_code=403,
         )
 
@@ -383,7 +390,7 @@ async def login(
         return templates.TemplateResponse(
             request,
             "error.html",
-            {"error": "invalid_request", "detail": "Invalid or inactive client."},
+            AUTH_ERRORS.unauthorized_client.to_dict(),
             status_code=400,
         )
 
@@ -391,7 +398,7 @@ async def login(
         return templates.TemplateResponse(
             request,
             "error.html",
-            {"error": "invalid_request", "detail": "Invalid redirect URI."},
+            AUTH_ERRORS.invalid_request.to_dict(),
             status_code=400,
         )
 
@@ -439,8 +446,8 @@ async def login(
     if response_type != "code":
         params = urlencode(
             {
-                "error": "unsupported_response_type",
-                "error_description": "response_type must be 'code'.",
+                "error": AUTH_ERRORS.unsupported_response_type.type,
+                "error_description": AUTH_ERRORS.unsupported_response_type.description,
                 "state": state,
             }
         )
@@ -449,8 +456,8 @@ async def login(
     if code_challenge_method != "S256":
         params = urlencode(
             {
-                "error": "invalid_request",
-                "error_description": "code_challenge_method must be 'S256'.",
+                "error": AUTH_ERRORS.invalid_request.type,
+                "error_description": AUTH_ERRORS.invalid_request.description,
                 "state": state,
             }
         )
@@ -465,8 +472,8 @@ async def login(
     if invalid_scopes:
         params = urlencode(
             {
-                "error": "invalid_scope",
-                "error_description": f"Scopes not allowed: {', '.join(invalid_scopes)}",
+                "error": AUTH_ERRORS.invalid_scope.type,
+                "error_description": AUTH_ERRORS.invalid_scope.description,
                 "state": state,
             }
         )
@@ -517,10 +524,7 @@ async def login(
         return templates.TemplateResponse(
             request,
             "error.html",
-            {
-                "error": "server_error",
-                "detail": "Failed to create authorization code. Please try again.",
-            },
+            AUTH_ERRORS.server_error.to_dict(),
             status_code=500,
         )
 
@@ -543,6 +547,7 @@ async def login(
 
 @router.post(
     "/token",
+    response_model=TokenResponse,
     summary="OAuth2 Token Endpoint",
     description=(
         "Exchanges an authorization code + code_verifier for JWT tokens. "
@@ -550,9 +555,8 @@ async def login(
         "Returns access_token (60 min TTL) and refresh_token (7 day TTL). "
         "(RFC 6749 §4.1.3, RFC 7636 §4.5)"
     ),
-    include_in_schema=False,  # Token endpoint is not part of OpenAPI docs
 )
-@limiter.limit("10/minute")  # Rate limit to prevent brute force
+@limiter.limit("5/minute")  # Rate limit to prevent brute force
 async def token_exchange(
     request: Request,
     grant_type: str = Form(..., description="Must be 'authorization_code'"),
@@ -603,10 +607,7 @@ async def token_exchange(
     if grant_type != "authorization_code":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "unsupported_grant_type",
-                "error_description": "grant_type must be 'authorization_code'.",
-            },
+            detail=AUTH_ERRORS.invalid_request.to_dict(),
         )
 
     # ----------------------------------------------------------------
@@ -619,97 +620,109 @@ async def token_exchange(
     if not auth_code_doc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_grant",
-                "error_description": "Authorization code is invalid.",
-            },
+            detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 3: Validate code has not expired (5 min TTL)
+    # Step 3: Check if code has already been used (RFC 6749 §4.1.2)
+    # If an authorization code is used more than once, this indicates a security breach.
+    # The server MUST deny the request and SHOULD revoke all tokens previously issued
+    # based on that authorization code.
+    # ----------------------------------------------------------------
+    if auth_code_doc.used:
+        # CRITICAL: This is a replay attack! Revoke all tokens from this code.
+        revoked_count = 0
+        try:
+            # Find all refresh tokens issued from this authorization code
+            refresh_tokens = await RefreshToken.find(
+                RefreshToken.authorization_code == auth_code_doc.code,
+                RefreshToken.is_revoked == False,
+            ).to_list()
+
+            # Revoke each token
+            now = datetime.now(timezone.utc)
+            for rt in refresh_tokens:
+                rt.is_revoked = True
+                rt.revoked_at = now
+                await rt.save()
+                revoked_count += 1
+
+        except Exception as e:
+            # Log the error but still deny the request
+            print(
+                f"ERROR: Failed to revoke tokens for replayed auth code {auth_code_doc.code}: {e}"
+            )
+
+        # Always deny the request
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AUTH_ERRORS.access_denied.to_dict(),
+        )
+
+    # ----------------------------------------------------------------
+    # Step 4: Validate code has not expired (5 min TTL)
     # ----------------------------------------------------------------
     now = datetime.now(timezone.utc)
     if auth_code_doc.expires_at < now:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_grant",
-                "error_description": "Authorization code has expired.",
-            },
+            detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 4: Validate client_id matches
+    # Step 5: Validate client_id matches
     # ----------------------------------------------------------------
     if auth_code_doc.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_grant",
-                "error_description": "client_id does not match the authorization request.",
-            },
+            detail=AUTH_ERRORS.unauthorized_client.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 5: Validate redirect_uri matches
+    # Step 6: Validate redirect_uri matches
     # ----------------------------------------------------------------
     if auth_code_doc.redirect_uri != redirect_uri:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_grant",
-                "error_description": "redirect_uri does not match the authorization request.",
-            },
+            detail=AUTH_ERRORS.invalid_request.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 6: Validate PKCE proof (RFC 7636 §4.5)
+    # Step 7: Validate PKCE proof (RFC 7636 §4.5)
     # Verify that SHA256(code_verifier) == stored code_challenge
     # This proves the same entity that requested the code is exchanging it
     # ----------------------------------------------------------------
     if auth_code_doc.code_challenge_method != "S256":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_request",
-                "error_description": "Unsupported code_challenge_method.",
-            },
+            detail=AUTH_ERRORS.invalid_request.to_dict(),
         )
 
     # Import PKCE verification function
     if not verify_code_challenge(code_verifier, auth_code_doc.code_challenge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_grant",
-                "error_description": "code_verifier does not match code_challenge.",
-            },
+            detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 7: Lookup the user who authorized this code
+    # Step 8: Lookup the user who authorized this code
     # ----------------------------------------------------------------
-    user = await User.find_by_id(auth_code_doc.user_id)
+    user = await User.get(auth_code_doc.user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "server_error",
-                "detail": "User associated with authorization code not found.",
-            },
+            detail=AUTH_ERRORS.server_error.to_dict(),
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_grant",
-                "error_description": "User account is deactivated.",
-            },
+            detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 8: Lookup OAuth2Client to verify it's still active
+    # Step 9: Lookup OAuth2Client to verify it's still active
     # ----------------------------------------------------------------
     client: Optional[OAuth2Client] = await OAuth2Client.find_one(
         OAuth2Client.client_id == client_id
@@ -717,14 +730,26 @@ async def token_exchange(
     if not client or not client.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "invalid_client",
-                "error_description": "Client is invalid or inactive.",
-            },
+            detail=AUTH_ERRORS.unauthorized_client.to_dict(),
         )
 
     # ----------------------------------------------------------------
-    # Step 9: Generate access token (60 min TTL, HS256, RFC 7519)
+    # Step 10: Mark authorization code as USED (RFC 6749 §4.1.2)
+    # Keep the code document for replay attack detection instead of deleting immediately.
+    # MongoDB TTL index will auto-delete after expiration.
+    # ----------------------------------------------------------------
+    try:
+        auth_code_doc.used = True
+        auth_code_doc.used_at = datetime.now(timezone.utc)
+        await auth_code_doc.save()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=AUTH_ERRORS.server_error.to_dict(),
+        ) from e
+
+    # ----------------------------------------------------------------
+    # Step 11: Generate access token (60 min TTL, HS256, RFC 7519)
     # Includes user_id, email, scopes, jti (token ID for revocation)
     # ----------------------------------------------------------------
     jwt_service = JWTService()
@@ -735,7 +760,7 @@ async def token_exchange(
     )
 
     # ----------------------------------------------------------------
-    # Step 10: Generate refresh token (7 day TTL, HS256, RFC 7519)
+    # Step 12: Generate refresh token (7 day TTL, HS256, RFC 7519)
     # Used to get new access tokens without re-authenticating
     # ----------------------------------------------------------------
     refresh_token = jwt_service.create_refresh_token(
@@ -744,14 +769,16 @@ async def token_exchange(
     )
 
     # ----------------------------------------------------------------
-    # Step 11: Store RefreshToken document for revocation/tracking
-    # Allows us to invalidate refresh tokens if needed
+    # Step 13: Store RefreshToken document for revocation/tracking
+    # Includes authorization_code reference for replay attack mitigation
     # ----------------------------------------------------------------
+    # Hash the refresh token (never store plaintext in database)
+    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     refresh_token_doc = RefreshToken(
         user_id=str(user.id),
-        token=refresh_token,
-        client_id=client_id,
-        created_at=now,
+        authorization_code=auth_code_doc.code,  # Track which code generated this token
+        token_hash=token_hash,
+        issued_at=now,
         expires_at=now + timedelta(days=7),
     )
 
@@ -760,33 +787,21 @@ async def token_exchange(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "server_error",
-                "detail": "Failed to store refresh token.",
-            },
+            detail=AUTH_ERRORS.server_error.to_dict(),
         ) from e
 
     # ----------------------------------------------------------------
-    # Step 12: Delete used authorization code (prevent replay attacks)
-    # Per RFC 6749 §10.5: "Authorization codes MUST be short-lived"
-    # and "MUST NOT be issued to public clients"
-    # ----------------------------------------------------------------
-    try:
-        await auth_code_doc.delete()
-    except Exception as e:
-        # Log but don't fail — token was already issued
-        pass
-
-    # ----------------------------------------------------------------
-    # Step 13: Return token response (RFC 6749 §4.1.4)
+    # Step 14: Return token response (RFC 6749 §4.1.4)
     # access_token: JWT token for API requests
     # token_type: "Bearer" per RFC 6750 (OAuth 2.0 Bearer Token)
     # expires_in: Seconds until access_token expires (60 min = 3600 sec)
     # refresh_token: JWT for getting new access_token without re-auth
     # ----------------------------------------------------------------
-    return {
-        "access_token": access_token,
-        "token_type": "Bearer",
-        "expires_in": 3600,  # 60 minutes in seconds
-        "refresh_token": refresh_token,
-    }
+    response = TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="Bearer",
+        expires_in=3600,
+    )
+
+    return response
