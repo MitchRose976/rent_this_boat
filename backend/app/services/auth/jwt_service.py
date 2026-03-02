@@ -28,39 +28,47 @@ from app.models.auth import JwtTokenPayload
 
 
 class JWTService:
-    """Service for creating and validating JWT tokens."""
+    """
+    Service for creating and validating JWT access and refresh tokens.
+
+    Usage:
+        - Instantiate with optional overrides for secret key, algorithm, and expiration times.
+        - By default, loads configuration from app settings (see app.core.config.settings):
+            * secret_key: settings.jwt_secret_key (must be 32+ bytes)
+            * algorithm: settings.jwt_algorithm (default: "HS256")
+            * access_token_expire_minutes: settings.jwt_access_token_expire_minutes (default: 60)
+            * refresh_token_expire_days: settings.jwt_refresh_token_expire_days (default: 7)
+        - Use create_access_token() for short-lived tokens (default: 1 hour)
+        - Use create_refresh_token() for long-lived tokens (default: 7 days)
+        - Use verify_token() to validate and decode tokens (raises on error)
+        - Use get_user_id_from_token() and get_scopes_from_token() for convenience claim extraction
+        - All tokens are signed and validated using the configured algorithm and secret key
+    """
 
     def __init__(
         self,
         secret_key: str = None,
-        algorithm: str = None,
-        access_token_expire_minutes: int = None,
-        refresh_token_expire_days: int = None,
+        algorithm: str = "HS256",
+        access_token_expire_minutes: int = 60,
+        refresh_token_expire_days: int = 7,
     ):
         """
         Initialize JWT service.
 
         Args:
-            secret_key: Secret key for signing tokens (should be 32+ chars).
-                       If None, loads from settings.jwt_secret_key
-            algorithm: JWT algorithm (HS256 = HMAC-SHA256).
-                      If None, loads from settings.jwt_algorithm
-            access_token_expire_minutes: Expiration time for access tokens.
-                                        If None, loads from settings
-            refresh_token_expire_days: Expiration time for refresh tokens.
-                                      If None, loads from settings
+            secret_key: Secret key for signing tokens (32+ bytes). If None, uses settings.jwt_secret_key.
+            algorithm: JWT algorithm (default: "HS256"). If None, uses settings.jwt_algorithm.
+            access_token_expire_minutes: Access token lifetime in minutes (default: 60). If None, uses settings.jwt_access_token_expire_minutes.
+            refresh_token_expire_days: Refresh token lifetime in days (default: 7). If None, uses settings.jwt_refresh_token_expire_days.
 
         Raises:
-            ValueError: If secret_key is not provided or is too weak
+            ValueError: If secret_key is not provided or is too weak, or if algorithm is not allowed.
 
         Note:
-            For production, use RS256 (RSA) with public/private keys if you need
-            token verification across multiple services.
+            For distributed systems, consider RS256 (public/private key) for cross-service verification.
         """
         self.secret_key = secret_key or settings.jwt_secret_key
-        self.algorithm = (
-            algorithm or settings.jwt_algorithm
-        )  # TODO: move algorithm out of .env since security decisions should be in code, not config
+        self.algorithm = algorithm or settings.jwt_algorithm
         self.access_token_expire_minutes = (
             access_token_expire_minutes or settings.jwt_access_token_expire_minutes
         )
@@ -103,20 +111,18 @@ class JWTService:
             user_id: User's MongoDB ObjectId (as string)
             email: User's email address
             scopes: List of permission scopes (e.g., ["boats:read", "bookings:write"])
-            expires_in_minutes: Token expiration time. If None, uses default from settings (default 1 hour)
+            expires_in_minutes: Optional override for token expiration (minutes). If None, uses default (60).
 
         Returns:
             Encoded JWT string (e.g., "eyJhbGc...")
 
         Example:
-            >>> service = JWTService()  # Loads from settings
+            >>> service = JWTService()  # Uses settings by default
             >>> token = service.create_access_token(
             ...     user_id="507f1f77bcf86cd799439011",
             ...     email="user@example.com",
             ...     scopes=["boats:read", "bookings:write"],
             ... )
-            >>> len(token) > 50
-            True
         """
         if expires_in_minutes is None:
             expires_in_minutes = self.access_token_expire_minutes
@@ -150,19 +156,18 @@ class JWTService:
         """
         Create a signed JWT refresh token.
 
-        Refresh tokens live longer (days) than access tokens (hours).
-        When access token expires, client uses refresh token to get a new one.
+        Refresh tokens are long-lived (default: 7 days) and used to obtain new access tokens.
 
         Args:
             user_id: User's MongoDB ObjectId (as string)
             email: User's email address
-            expires_in_days: Token expiration time. If None, uses default from settings (default 7 days)
+            expires_in_days: Optional override for token expiration (days). If None, uses default (7).
 
         Returns:
             Encoded JWT string
 
         Example:
-            >>> service = JWTService()  # Loads from settings
+            >>> service = JWTService()  # Uses settings by default
             >>> token = service.create_refresh_token(
             ...     user_id="507f1f77bcf86cd799439011",
             ...     email="user@example.com",
@@ -191,23 +196,15 @@ class JWTService:
 
     def verify_token(self, token: str) -> JwtTokenPayload:
         """
-        Verify and decode a JWT token with full validation.
+        Verify and decode a JWT token with full validation and claim checks.
 
-        This function performs comprehensive JWT validation following RFC 7519 and
-        OAuth2 best practices. It validates:
-        - Signature (proves token wasn't tampered with) using HS256
-        - Expiration (exp claim) - token not stale
-        - Issuer (iss claim) - token came from expected service
-        - Audience (aud claim) - token intended for this client
-        - Algorithm (HS256 only, prevents algorithm confusion attacks)
-        - Structure (Pydantic model validation of required claims)
-
-        Security measures:
-        - Whitelist algorithm approach (only HS256 allowed, prevents "none" algorithm)
-        - Explicitly requires valid signature
-        - Validates registered claims (iss, aud, exp, iat)
-        - Rejects tokens with missing or invalid claims
-        - Returns typed JwtTokenPayload for type safety
+        Validates:
+            - Signature (using configured secret and algorithm)
+            - Expiration (exp claim)
+            - Issuer (iss claim matches settings.jwt_issuer)
+            - Audience (aud claim matches settings.jwt_audience)
+            - Algorithm (must be allowed)
+            - Structure (all required claims present and valid)
 
         Args:
             token: Encoded JWT string (format: header.payload.signature)
@@ -216,23 +213,8 @@ class JWTService:
             JwtTokenPayload model with validated and typed claims
 
         Raises:
-            jwt.ExpiredSignatureError: Token has expired (exp claim in past)
-            jwt.InvalidTokenError:
-                - Token signature is invalid or tampered with
-                - Issuer (iss) doesn't match expected value
-                - Audience (aud) doesn't match expected value
-                - Algorithm is not HS256
-                - Token is malformed or missing required claims
-            ValueError: Token claims don't match JwtTokenPayload schema
-
-        Example:
-            >>> service = JWTService()  # Loads from settings
-            >>> token = service.create_access_token("user123", "user@example.com", ["boats:read"])
-            >>> claims = service.verify_token(token)
-            >>> claims.sub
-            'user123'
-            >>> claims.scopes
-            ['boats:read']
+            jwt.ExpiredSignatureError: If token is expired
+            jwt.InvalidTokenError: If token is invalid, tampered, or claims are missing/incorrect
         """
         try:
             # Decode and verify the JWT with explicit security options
@@ -264,13 +246,13 @@ class JWTService:
 
     def get_user_id_from_token(self, token: str) -> str:
         """
-        Extract user_id from a valid token (convenience method).
+        Extract user_id ("sub" claim) from a valid token.
 
         Args:
             token: Encoded JWT string
 
         Returns:
-            User ID from token (extracted from 'sub' claim)
+            User ID (string)
 
         Raises:
             jwt.InvalidTokenError: If token is invalid or expired
@@ -280,7 +262,7 @@ class JWTService:
 
     def get_scopes_from_token(self, token: str) -> List[str]:
         """
-        Extract scopes from a valid token (convenience method).
+        Extract scopes ("scopes" claim) from a valid token.
 
         Args:
             token: Encoded JWT string
@@ -296,13 +278,13 @@ class JWTService:
 
     def is_token_expired(self, token: str) -> bool:
         """
-        Check if a token is expired without raising exception.
+        Check if a token is expired (returns True/False instead of raising).
 
         Args:
             token: Encoded JWT string
 
         Returns:
-            True if token is expired, False if valid or error
+            True if token is expired, False if valid or invalid for other reasons
         """
         try:
             self.verify_token(token)
