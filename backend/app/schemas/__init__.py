@@ -4,15 +4,11 @@ Data models for the Rent This Boat application.
 This module exports all document models and related enums for easy importing.
 """
 
-# User models
-from .user import User, UserRole
-
 # Address models
 from .address import Address, CountryCode
 
 # Boat models
 from .boat import (
-    Boat,
     BoatType,
     BoatColor,
     BoatColorScheme,
@@ -22,12 +18,9 @@ from .boat import (
 )
 
 # Posting models
-from .posting import Posting, PostingStatus
+from .posting import PostingStatus
 
 __all__ = [
-    # User
-    "User",
-    "UserRole",
     # Address
     "Address",
     "CountryCode",

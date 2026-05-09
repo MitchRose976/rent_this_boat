@@ -1,6 +1,9 @@
+from datetime import datetime
+from typing import List, Optional
 from typing_extensions import Annotated
 from beanie import Document, Indexed
 from pydantic import Field
+
 
 # ============================================================================
 # OAuth2 PKCE Models (Beanie Documents for MongoDB persistence)
@@ -80,18 +83,18 @@ class AuthorizationCode(Document):
         Indexed(),
     ]
     used_at: Annotated[
-        Optional[datetime.datetime],
+        Optional[datetime],
         Field(
             default=None,
             description="Timestamp when code was used (null if not used yet)",
         ),
     ]
     created_at: Annotated[
-        datetime.datetime,
-        Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)),
+        datetime,
+        Field(default_factory=lambda: datetime.now(datetime.timezone.utc)),
     ]
     expires_at: Annotated[
-        datetime.datetime,
+        datetime,
         Field(
             description="Expiration time (5-10 minutes after creation)",
             index={"expireAfterSeconds": 0},  # TTL index - auto-delete when expired
@@ -169,21 +172,21 @@ class RefreshToken(Document):
         Indexed(),
     ]
     revoked_at: Annotated[
-        Optional[datetime.datetime],
+        Optional[datetime],
         Field(
             default=None,
             description="Timestamp when token was revoked (null if not revoked)",
         ),
     ]
     issued_at: Annotated[
-        datetime.datetime,
+        datetime,
         Field(
-            default_factory=lambda: datetime.datetime.now(datetime.timezone.utc),
+            default_factory=lambda: datetime.now(datetime.timezone.utc),
             description="When refresh token was issued",
         ),
     ]
     expires_at: Annotated[
-        datetime.datetime,
+        datetime,
         Field(
             description="Expiration time (7 days after issued_at)",
             index={"expireAfterSeconds": 0},  # TTL index - auto-delete when expired
@@ -287,9 +290,9 @@ class OAuth2Client(Document):
         Field(description="Email of person/team responsible for this client"),
     ]
     created_at: Annotated[
-        datetime.datetime,
+        datetime,
         Field(
-            default_factory=lambda: datetime.datetime.now(datetime.timezone.utc),
+            default_factory=lambda: datetime.now(datetime.timezone.utc),
         ),
     ]
     created_by: Annotated[

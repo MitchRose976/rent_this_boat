@@ -3,10 +3,11 @@ from pymongo import AsyncMongoClient
 from pymongo.server_api import ServerApi
 from typing import Any, Dict
 from pathlib import Path
-from ..schemas import User
-from ..schemas.auth import AuthorizationCode, RefreshToken, OAuth2Client
-from ..core import config
 from beanie import init_beanie
+
+from .models.user import User
+from .models.auth import AuthorizationCode, RefreshToken, OAuth2Client
+from ..core import config
 
 
 @lru_cache

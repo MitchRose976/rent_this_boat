@@ -5,7 +5,7 @@ from datetime import datetime, date, timezone
 from typing import Optional
 from enum import Enum
 
-from .address import Address
+from ...schemas import Address
 
 
 class UserRole(str, Enum):

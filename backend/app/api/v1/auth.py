@@ -19,12 +19,10 @@ from ...schemas.auth import (
     ErrorResponse,
     RegisterRequest,
     RegisterResponse,
-    AuthorizationCode,
-    OAuth2Client,
-    RefreshToken,
     TokenResponse,
 )
-from ...schemas.user import User
+from ...db.models.user import User
+from ...db.models.auth import AuthorizationCode, OAuth2Client, RefreshToken
 
 # Create router for auth endpoints
 router = APIRouter(
