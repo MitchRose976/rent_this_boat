@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     jwt_audience: str = "rent-this-boat-client"
 
     # Allowed JWT algorithms (not configurable via .env - security policy)
-    JWT_ALLOWED_ALGORITHMS: list[str] = ["HS256"]  # Only HS256 for single-service
+    jwt_allowed_algorithms: list[str] = ["HS256"]  # Only HS256 for single-service
 
     model_config = SettingsConfigDict(
         env_file=str(env_path),

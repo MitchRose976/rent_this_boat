@@ -34,9 +34,6 @@ class JWTService:
         - Instantiate with optional overrides for secret key, algorithm, and expiration times.
         - By default, loads configuration from app settings (see app.core.config.settings):
             * secret_key: settings.jwt_secret_key (must be 32+ bytes)
-            * algorithm: "HS256"
-            * access_token_expire_minutes: 60 (1 hour)
-            * refresh_token_expire_days: 7 (7 days)
         - Use create_access_token() for short-lived tokens (default: 1 hour)
         - Use create_refresh_token() for long-lived tokens (default: 7 days)
         - Use verify_token() to validate and decode tokens (raises on error)
@@ -76,10 +73,10 @@ class JWTService:
             raise ValueError("JWT_SECRET_KEY must be set and at least 32 bytes.")
 
         # Validate algorithm is whitelisted (prevents algorithm confusion attacks)
-        if self.algorithm not in settings.JWT_ALLOWED_ALGORITHMS:
+        if self.algorithm not in settings.jwt_allowed_algorithms:
             raise ValueError(
                 f"Algorithm '{self.algorithm}' not allowed. "
-                f"Supported algorithms: {settings.JWT_ALLOWED_ALGORITHMS}."
+                f"Supported algorithms: {settings.jwt_allowed_algorithms}."
             )
 
     @staticmethod
