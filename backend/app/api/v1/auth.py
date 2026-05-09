@@ -160,7 +160,7 @@ async def authorize_get(
     client_id: str = Query(
         ..., min_length=1, max_length=128, description="OAuth2 client identifier"
     ),
-    redirect_uri: str = Query(..., description="Must match a registered redirect URI"),
+    redirect_uri: Optional[str] = Query(None, description="Must match a registered redirect URI (optional per RFC 6749 §4.1.1)"),
     code_challenge: str = Query(..., description="PKCE code challenge"),
     code_challenge_method: str = Query(
         default="S256", description="PKCE method — only S256 supported"
@@ -184,7 +184,7 @@ async def authorize_get(
     Args:
     - response_type: Must be "code" for authorization code flow
     - client_id: Registered OAuth2 client identifier
-    - redirect_uri: Must match one of the client's registered redirect URIs
+    - redirect_uri: Must be included in request and match one of the client's registered redirect URIs
     - code_challenge: PKCE code challenge from the client
     - code_challenge_method: Must be "S256" (SHA256) for PKCE
     - scope: Optional space-delimited scopes requested by the client
@@ -223,9 +223,10 @@ async def authorize_get(
             status_code=400,
         )
 
+
     # Step 2: Validate redirect_uri
-    # If redirect_uri is invalid, MUST NOT redirect — show error page
-    if redirect_uri not in client.redirect_uris:
+    # If redirect_uri is missing or invalid, MUST NOT redirect — show error page
+    if not redirect_uri or redirect_uri not in client.redirect_uris:
         return templates.TemplateResponse(
             request,
             "error.html",
@@ -796,12 +797,14 @@ async def token_exchange(
     # token_type: "Bearer" per RFC 6750 (OAuth 2.0 Bearer Token)
     # expires_in: Seconds until access_token expires (60 min = 3600 sec)
     # refresh_token: JWT for getting new access_token without re-auth
+    # scope: Optional space-delimited list of scopes granted by the token
     # ----------------------------------------------------------------
     response = TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=3600,
+        scope=" ".join(auth_code_doc.scopes),
     )
 
     return response

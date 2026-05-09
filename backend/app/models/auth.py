@@ -166,6 +166,10 @@ class TokenResponse(BaseModel):
         description="Token type (should be 'bearer')",
     )
     expires_in: int = Field(description="Access token expiration time in seconds")
+    scope: Optional[str] = Field(
+        default=None,
+        description="Optional space-separated list of scopes granted by the token",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -174,6 +178,7 @@ class TokenResponse(BaseModel):
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
                 "expires_in": 3600,
+                "scope": "boats:read bookings:write",
             }
         }
     }
