@@ -49,16 +49,19 @@ async def lifespan(app: FastAPI):
 # - version: semantic version of the API
 # - lifespan: context manager for app startup/shutdown events
 # ============================================================================
+route_prefix = "/api/v1"
 app = FastAPI(
     title="Rent This Boat API",
     description="OAuth2 + PKCE authentication with boat rental management",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=f"{route_prefix}/docs",
+    redoc_url=f"{route_prefix}/redoc",
+    openapi_url=f"{route_prefix}/openapi.json",
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-route_prefix = "/api/v1"
 
 # CORS configuration
 origins = [
