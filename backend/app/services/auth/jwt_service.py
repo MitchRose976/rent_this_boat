@@ -20,7 +20,6 @@ Flow:
 
 import jwt
 import secrets
-import base64
 from datetime import datetime, timedelta, timezone
 from typing import List
 from app.core.config import settings
@@ -35,9 +34,9 @@ class JWTService:
         - Instantiate with optional overrides for secret key, algorithm, and expiration times.
         - By default, loads configuration from app settings (see app.core.config.settings):
             * secret_key: settings.jwt_secret_key (must be 32+ bytes)
-            * algorithm: settings.jwt_algorithm (default: "HS256")
-            * access_token_expire_minutes: settings.jwt_access_token_expire_minutes (default: 60)
-            * refresh_token_expire_days: settings.jwt_refresh_token_expire_days (default: 7)
+            * algorithm: "HS256"
+            * access_token_expire_minutes: 60 (1 hour)
+            * refresh_token_expire_days: 7 (7 days)
         - Use create_access_token() for short-lived tokens (default: 1 hour)
         - Use create_refresh_token() for long-lived tokens (default: 7 days)
         - Use verify_token() to validate and decode tokens (raises on error)
@@ -57,9 +56,9 @@ class JWTService:
 
         Args:
             secret_key: Secret key for signing tokens (32+ bytes). If None, uses settings.jwt_secret_key.
-            algorithm: JWT algorithm (default: "HS256"). If None, uses settings.jwt_algorithm.
-            access_token_expire_minutes: Access token lifetime in minutes (default: 60). If None, uses settings.jwt_access_token_expire_minutes.
-            refresh_token_expire_days: Refresh token lifetime in days (default: 7). If None, uses settings.jwt_refresh_token_expire_days.
+            algorithm: "HS256"
+            access_token_expire_minutes: Access token lifetime in minutes (default: 60).
+            refresh_token_expire_days: Refresh token lifetime in days (default: 7).
 
         Raises:
             ValueError: If secret_key is not provided or is too weak, or if algorithm is not allowed.
@@ -68,13 +67,9 @@ class JWTService:
             For distributed systems, consider RS256 (public/private key) for cross-service verification.
         """
         self.secret_key = secret_key or settings.jwt_secret_key
-        self.algorithm = algorithm or settings.jwt_algorithm
-        self.access_token_expire_minutes = (
-            access_token_expire_minutes or settings.jwt_access_token_expire_minutes
-        )
-        self.refresh_token_expire_days = (
-            refresh_token_expire_days or settings.jwt_refresh_token_expire_days
-        )
+        self.algorithm = algorithm or "HS256"
+        self.access_token_expire_minutes = access_token_expire_minutes or 60
+        self.refresh_token_expire_days = refresh_token_expire_days or 7
 
         # Validate secret key strength
         if not self.secret_key or len(self.secret_key.encode("utf-8")) < 32:
@@ -144,7 +139,9 @@ class JWTService:
 
         # Encode the payload with secret key
         # jwt.encode() returns a string
-        token = jwt.encode(payload.model_dump(), self.secret_key, algorithm=self.algorithm)
+        token = jwt.encode(
+            payload.model_dump(), self.secret_key, algorithm=self.algorithm
+        )
         return token
 
     def create_refresh_token(
@@ -191,7 +188,9 @@ class JWTService:
             token_type="refresh",
         )
 
-        token = jwt.encode(payload.model_dump(), self.secret_key, algorithm=self.algorithm)
+        token = jwt.encode(
+            payload.model_dump(), self.secret_key, algorithm=self.algorithm
+        )
         return token
 
     def verify_token(self, token: str) -> JwtTokenPayload:

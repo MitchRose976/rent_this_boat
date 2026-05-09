@@ -17,9 +17,6 @@ class Settings(BaseSettings):
 
     # JWT Configuration
     jwt_secret_key: str = ""  # Must be loaded from .env
-    jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60
-    jwt_refresh_token_expire_days: int = 7
     jwt_issuer: str = "rent-this-boat-api"
     jwt_audience: str = "rent-this-boat-client"
 
