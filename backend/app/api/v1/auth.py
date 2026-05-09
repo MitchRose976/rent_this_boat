@@ -760,7 +760,7 @@ async def token_exchange(
     # ----------------------------------------------------------------
     jwt_service = JWTService()
     access_token = jwt_service.create_access_token(
-        user.id,
+        str(user.id),
         email=user.email,
         scopes=auth_code_doc.scopes,
     )
