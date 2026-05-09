@@ -23,7 +23,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List
 from app.core.config import settings
-from app.models.auth import JwtTokenPayload
+from app.schemas.auth import JwtTokenPayload
 
 
 class JWTService:

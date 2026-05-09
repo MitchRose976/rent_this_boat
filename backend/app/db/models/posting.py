@@ -4,8 +4,8 @@ from pydantic import Field, ConfigDict
 from datetime import datetime, timezone
 from typing import Optional
 from .boat import Boat
-from ...models.address import Address
-from ...models.posting import PostingStatus
+from ...schemas.address import Address
+from ...schemas.posting import PostingStatus
 
 
 class Posting(Document):

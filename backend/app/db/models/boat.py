@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import ConfigDict, Field
 from typing_extensions import Annotated
 from beanie import Document, Indexed
-from ...models.boat import BoatType, BoatCondition, BoatColor, BoatColorScheme
+from ...schemas.boat import BoatType, BoatCondition, BoatColor, BoatColorScheme
 
 
 class Boat(Document):

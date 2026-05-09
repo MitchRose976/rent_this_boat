@@ -15,7 +15,7 @@ from ...services.auth.utils import hash_password, verify_password
 from ...services.auth.password_service import PasswordValidator
 from ...services.auth.jwt_service import JWTService
 from ...services.auth.pkce import verify_code_challenge
-from ...models.auth import (
+from ...schemas.auth import (
     ErrorResponse,
     RegisterRequest,
     RegisterResponse,
@@ -24,7 +24,7 @@ from ...models.auth import (
     RefreshToken,
     TokenResponse,
 )
-from ...models.user import User
+from ...schemas.user import User
 
 # Create router for auth endpoints
 router = APIRouter(
