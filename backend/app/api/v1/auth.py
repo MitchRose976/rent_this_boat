@@ -7,7 +7,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from fastapi import APIRouter, status, HTTPException, Request, Query, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from ...core.errors import AUTH_ERRORS
 from ...core.limiter import limiter
@@ -25,7 +25,6 @@ from ...models.auth import (
     TokenResponse,
 )
 from ...models.user import User
-
 
 # Create router for auth endpoints
 router = APIRouter(
@@ -160,7 +159,10 @@ async def authorize_get(
     client_id: str = Query(
         ..., min_length=1, max_length=128, description="OAuth2 client identifier"
     ),
-    redirect_uri: Optional[str] = Query(None, description="Must match a registered redirect URI (optional per RFC 6749 §4.1.1)"),
+    redirect_uri: Optional[str] = Query(
+        None,
+        description="Must match a registered redirect URI (optional per RFC 6749 §4.1.1)",
+    ),
     code_challenge: str = Query(..., description="PKCE code challenge"),
     code_challenge_method: str = Query(
         default="S256", description="PKCE method — only S256 supported"
@@ -222,7 +224,6 @@ async def authorize_get(
             AUTH_ERRORS.unauthorized_client.to_dict(),
             status_code=400,
         )
-
 
     # Step 2: Validate redirect_uri
     # If redirect_uri is missing or invalid, MUST NOT redirect — show error page
@@ -548,7 +549,6 @@ async def login(
 
 @router.post(
     "/token",
-    response_model=TokenResponse,
     summary="OAuth2 Token Endpoint",
     description=(
         "Exchanges an authorization code + code_verifier for JWT tokens. "
@@ -565,7 +565,12 @@ async def token_exchange(
         ..., description="Client ID (must match authorization request)"
     ),
     code: str = Form(..., description="Authorization code from /authorize endpoint"),
-    code_verifier: str = Form(..., description="PKCE code_verifier (43-128 chars)"),
+    code_verifier: str = Form(
+        ...,
+        description="PKCE code_verifier (43-128 chars)",
+        min_length=43,
+        max_length=128,
+    ),
     redirect_uri: str = Form(
         ..., description="Redirect URI (must match authorization request)"
     ),
@@ -608,7 +613,7 @@ async def token_exchange(
     if grant_type != "authorization_code":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=AUTH_ERRORS.invalid_request.to_dict(),
+            detail=AUTH_ERRORS.unsupported_grant_type.to_dict(),
         )
 
     # ----------------------------------------------------------------
@@ -807,4 +812,11 @@ async def token_exchange(
         scope=" ".join(auth_code_doc.scopes),
     )
 
-    return response
+    return JSONResponse(
+        status_code=200,
+        content=response.model_dump(),
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
