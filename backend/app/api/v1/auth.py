@@ -124,6 +124,7 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
 #   1. GET  /authorize  — validate OAuth2 params, render login form
 #   2. POST /login  — authenticate user, issue code, 302 redirect
 #   3. POST /token  — exchange code + PKCE proof for JWT tokens
+#   4. POST /refresh — exchange refresh token for new access token
 #
 # We use GET to serve the login form (as required by the spec) and POST
 # to process the form submission (credentials never appear in URLs).
@@ -731,6 +732,78 @@ async def token_exchange(
         token_type="Bearer",
         expires_in=3600,
         scope=" ".join(auth_code_doc.scopes),
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content=response.model_dump(),
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+@router.post(
+    "/refresh",
+    summary="Refresh Access Token",
+    description=(
+        "Exchange a valid refresh token for a new access token. Validates the refresh token, checks revocation status, and issues a new access token with the same scopes. The refresh token itself is not rotated in this implementation (but can be revoked)."
+    ),
+)
+@limiter.limit("5/minute")
+async def refresh_token(
+    request: Request,
+    client_id: str = Form(
+        ..., description="Client ID associated with the refresh token"
+    ),
+    refresh_token: str = Form(
+        ..., description="Refresh token issued by /token endpoint"
+    ),
+):
+    """
+    Refresh Access Token Endpoint.
+
+    Validates the client and the provided refresh token and issues a new access token if valid.
+    """
+    # Step 1: Validate client_id
+    client: Optional[OAuth2Client] = await OAuth2Client.find_one(
+        OAuth2Client.client_id == client_id
+    )
+    if not client or not client.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AUTH_ERRORS.unauthorized_client.to_dict(),
+        )
+
+    # Step 2: Lookup refresh token in database and validate
+    refresh_token_doc: Optional[RefreshToken] = await RefreshToken.find_one(
+        RefreshToken.token_hash == hashlib.sha256(refresh_token.encode()).hexdigest()
+    )
+    is_expired = (
+        refresh_token_doc.expires_at < datetime.now(timezone.utc)
+        if refresh_token_doc
+        else True
+    )
+    if not refresh_token_doc or refresh_token_doc.is_revoked or is_expired:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AUTH_ERRORS.access_denied.to_dict(),
+        )
+
+    # Step 3: Issue new access token
+    jwt_service = JWTService()
+    access_token = jwt_service.create_access_token(
+        user_id=refresh_token_doc.user_id,
+        email=refresh_token_doc.email,
+        scopes=refresh_token_doc.scopes,
+    )
+
+    response = TokenResponse(
+        access_token=access_token,
+        token_type="Bearer",
+        expires_in=3600,
+        scope=" ".join(refresh_token_doc.scopes),
     )
 
     return JSONResponse(
