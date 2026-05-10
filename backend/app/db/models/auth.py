@@ -3,6 +3,7 @@ from typing import List, Optional
 from typing_extensions import Annotated
 from beanie import Document, Indexed
 from pydantic import Field
+from ...constants import REFRESH_TOKEN_TTL
 
 
 # ============================================================================
@@ -135,13 +136,13 @@ class RefreshToken(Document):
     4. Server validates token_hash and checks is_revoked flag
     5. Optional: admin can revoke all user's refresh tokens on logout
 
-    TTL: 7 days (expires automatically via MongoDB TTL index)
+    TTL: REFRESH_TOKEN_TTL["DAYS"] (expires automatically via MongoDB TTL index)
 
     Security:
     - Only token_hash is stored (plaintext never in database)
     - is_revoked flag allows immediate revocation without database scan
     - Indexed by user_id for fast revocation of all tokens
-    - Tokens automatically deleted after 7 days
+    - Tokens automatically deleted after REFRESH_TOKEN_TTL["DAYS"]
     """
 
     user_id: Annotated[
@@ -188,7 +189,7 @@ class RefreshToken(Document):
     expires_at: Annotated[
         datetime,
         Field(
-            description="Expiration time (7 days after issued_at)",
+            description=f"Expiration time ({REFRESH_TOKEN_TTL['DAYS']} days after issued_at)",
             index={"expireAfterSeconds": 0},  # TTL index - auto-delete when expired
         ),
     ]

@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, status, HTTPException, Request, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from ...constants import ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL
 from ...core.errors import AUTH_ERRORS
 from ...core.limiter import limiter
 from ...services.auth.utils import hash_password, verify_password
@@ -503,7 +504,7 @@ async def login(
     description=(
         "Exchanges an authorization code + code_verifier for JWT tokens. "
         "Validates PKCE proof, client credentials, and authorization code. "
-        "Returns access_token (60 min TTL) and refresh_token (7 day TTL). "
+        "Returns access_token and refresh_token. "
         "(RFC 6749 §4.1.3, RFC 7636 §4.5)"
     ),
 )
@@ -542,8 +543,8 @@ async def token_exchange(
        - SHA256(code_verifier) must equal stored code_challenge
        - Prevents authorization code interception attacks
     4. Lookup user who authorized the code
-    5. Generate JWT access token (60 min, HS256, RFC 7519 claims)
-    6. Generate JWT refresh token (7 days, HS256)
+    5. Generate JWT access token
+    6. Generate JWT refresh token
     7. Delete used authorization code (prevent replay attacks)
     8. Return tokens as JSON
 
@@ -693,7 +694,7 @@ async def token_exchange(
         scopes=auth_code_doc.scopes,
     )
 
-    # Step 12: Generate refresh token (7 day TTL, HS256, RFC 7519)
+    # Step 12: Generate refresh token
     # Used to get new access tokens without re-authenticating
     refresh_token = jwt_service.create_refresh_token(
         user.id,
@@ -709,7 +710,7 @@ async def token_exchange(
         authorization_code=auth_code_doc.code,  # Track which code generated this token
         token_hash=token_hash,
         issued_at=now,
-        expires_at=now + timedelta(days=7),
+        expires_at=now + timedelta(days=REFRESH_TOKEN_TTL["DAYS"]),
     )
 
     try:
@@ -723,14 +724,14 @@ async def token_exchange(
     # Step 14: Return token response (RFC 6749 §4.1.4)
     # access_token: JWT token for API requests
     # token_type: "Bearer" per RFC 6750 (OAuth 2.0 Bearer Token)
-    # expires_in: Seconds until access_token expires (60 min = 3600 sec)
+    # expires_in: Seconds until access_token expires
     # refresh_token: JWT for getting new access_token without re-auth
     # scope: Optional space-delimited list of scopes granted by the token
     response = TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="Bearer",
-        expires_in=3600,
+        expires_in=ACCESS_TOKEN_TTL["SECONDS"],
         scope=" ".join(auth_code_doc.scopes),
     )
 
@@ -802,7 +803,7 @@ async def refresh_token(
     response = TokenResponse(
         access_token=access_token,
         token_type="Bearer",
-        expires_in=3600,
+        expires_in=ACCESS_TOKEN_TTL["SECONDS"],
         scope=" ".join(refresh_token_doc.scopes),
     )
 

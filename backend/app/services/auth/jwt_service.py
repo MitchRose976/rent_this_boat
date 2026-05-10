@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 from app.core.config import settings
 from app.schemas.auth import JwtTokenPayload
+from ...constants import ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL
 
 
 class JWTService:
@@ -34,8 +35,8 @@ class JWTService:
         - Instantiate with optional overrides for secret key, algorithm, and expiration times.
         - By default, loads configuration from app settings (see app.core.config.settings):
             * secret_key: settings.jwt_secret_key (must be 32+ bytes)
-        - Use create_access_token() for short-lived tokens (default: 1 hour)
-        - Use create_refresh_token() for long-lived tokens (default: 7 days)
+        - Use create_access_token() for short-lived tokens (default: 15 minutes)
+        - Use create_refresh_token() for long-lived tokens (default: 1 day)
         - Use verify_token() to validate and decode tokens (raises on error)
         - Use get_user_id_from_token() and get_scopes_from_token() for convenience claim extraction
         - All tokens are signed and validated using the configured algorithm and secret key
@@ -45,8 +46,8 @@ class JWTService:
         self,
         secret_key: str = None,
         algorithm: str = "HS256",
-        access_token_expire_minutes: int = 60,
-        refresh_token_expire_days: int = 7,
+        access_token_expire_minutes: int = ACCESS_TOKEN_TTL["MINUTES"],
+        refresh_token_expire_days: int = REFRESH_TOKEN_TTL["DAYS"],
     ):
         """
         Initialize JWT service.
@@ -54,8 +55,8 @@ class JWTService:
         Args:
             secret_key: Secret key for signing tokens (32+ bytes). If None, uses settings.jwt_secret_key.
             algorithm: "HS256"
-            access_token_expire_minutes: Access token lifetime in minutes (default: 60).
-            refresh_token_expire_days: Refresh token lifetime in days (default: 7).
+            access_token_expire_minutes: Access token lifetime in minutes (default: 15).
+            refresh_token_expire_days: Refresh token lifetime in days (default: 1).
 
         Raises:
             ValueError: If secret_key is not provided or is too weak, or if algorithm is not allowed.
@@ -65,8 +66,12 @@ class JWTService:
         """
         self.secret_key = secret_key or settings.jwt_secret_key
         self.algorithm = algorithm or "HS256"
-        self.access_token_expire_minutes = access_token_expire_minutes or 60
-        self.refresh_token_expire_days = refresh_token_expire_days or 7
+        self.access_token_expire_minutes = (
+            access_token_expire_minutes or ACCESS_TOKEN_TTL["MINUTES"]
+        )
+        self.refresh_token_expire_days = (
+            refresh_token_expire_days or REFRESH_TOKEN_TTL["DAYS"]
+        )
 
         # Validate secret key strength
         if not self.secret_key or len(self.secret_key.encode("utf-8")) < 32:
@@ -103,7 +108,7 @@ class JWTService:
             user_id: User's MongoDB ObjectId (as string)
             email: User's email address
             scopes: List of permission scopes (e.g., ["boats:read", "bookings:write"])
-            expires_in_minutes: Optional override for token expiration (minutes). If None, uses default (60).
+            expires_in_minutes: Optional override for token expiration (minutes). If None, uses default (ACCESS_TOKEN_TTL["MINUTES"]).
 
         Returns:
             Encoded JWT string (e.g., "eyJhbGc...")
@@ -155,7 +160,7 @@ class JWTService:
         Args:
             user_id: User's MongoDB ObjectId (as string)
             email: User's email address
-            expires_in_days: Optional override for token expiration (days). If None, uses default (7).
+            expires_in_days: Optional override for token expiration (days). If None, uses default (REFRESH_TOKEN_TTL["DAYS"]).
 
         Returns:
             Encoded JWT string

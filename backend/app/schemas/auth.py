@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from typing_extensions import Annotated
+from ..constants import ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL
 
 
 # ============================================================================
@@ -136,7 +137,7 @@ class JwtTokenPayload(BaseModel):
         description="Permission scopes (e.g., ['boats:read', 'bookings:write'])",
     )
     token_type: str = Field(
-        description="Token type: 'access' (1 hour) or 'refresh' (7 days)"
+        description=f"Token type: 'access' ({ACCESS_TOKEN_TTL['MINUTES']} minutes) or 'refresh' ({REFRESH_TOKEN_TTL['DAYS']} day(s))"
     )
 
     model_config = {
@@ -177,7 +178,7 @@ class TokenResponse(BaseModel):
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "expires_in": 3600,
+                "expires_in": ACCESS_TOKEN_TTL["SECONDS"],
                 "scope": "boats:read bookings:write",
             }
         }
