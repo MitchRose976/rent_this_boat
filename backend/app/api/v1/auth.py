@@ -53,17 +53,6 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
     - Email format and uniqueness
     - Password strength requirements
     - User data completeness
-
-    Args:
-        request: RegisterRequest with email, password, first_name, last_name
-
-    Returns:
-        RegisterResponse with user details and success message
-
-    Raises:
-        HTTPException 400: Password validation failed
-        HTTPException 409: Email already registered
-        HTTPException 500: Database error
     """
 
     # Step 1: Validate password strength
@@ -180,26 +169,6 @@ async def authorize_get(
     - code_challenge_method == "S256"
     - requested scopes are allowed for the client
     - state parameter is present (for CSRF protection)
-
-    Args:
-    - response_type: Must be "code" for authorization code flow
-    - client_id: Registered OAuth2 client identifier
-    - redirect_uri: Must be included in request and match one of the client's registered redirect URIs
-    - code_challenge: PKCE code challenge from the client
-    - code_challenge_method: Must be "S256" (SHA256) for PKCE
-    - scope: Optional space-delimited scopes requested by the client
-    - state: Opaque value for CSRF protection, must be returned in the redirect
-
-    Returns:
-    - HTMLResponse with login form if validation passes
-
-    Raises:
-    - HTTPException 400: Invalid or missing parameters
-    - HTTPException 500: Server error during processing
-
-    Error handling per RFC 6749 §4.1.2.1:
-    - Invalid/missing client_id or redirect_uri → render error page (MUST NOT redirect)
-    - Other errors → 302 redirect to redirect_uri with error query params
     """
 
     # Step 1: Validate client_id
@@ -308,7 +277,7 @@ async def authorize_get(
         value=csrf_token,
         httponly=True,
         samesite="strict",
-        secure=False,  # TODO: Set True in production (requires HTTPS)
+        secure=False,  # TODO(deploy): Set True in production (requires HTTPS)
         max_age=600,  # 10 minutes — enough time to fill the form
     )
 
@@ -364,11 +333,9 @@ async def login(
     - On OAuth2 param errors: redirect with error params or show error page.
     """
 
-    # ----------------------------------------------------------------
     # Step 1: Verify CSRF token
     # Compare the httponly cookie value with the hidden form field.
     # Uses constant-time comparison to prevent timing attacks.
-    # ----------------------------------------------------------------
     cookie_csrf = request.cookies.get("csrf_token")
     if not cookie_csrf or not secrets.compare_digest(cookie_csrf, csrf_token):
         return templates.TemplateResponse(
@@ -378,11 +345,9 @@ async def login(
             status_code=403,
         )
 
-    # ----------------------------------------------------------------
     # Step 2: Re-validate client_id and redirect_uri
     # Hidden form fields can be tampered with by the user, so we must
     # re-validate before trusting them for the redirect
-    # ----------------------------------------------------------------
     client: Optional[OAuth2Client] = await OAuth2Client.find_one(
         OAuth2Client.client_id == client_id
     )
@@ -402,10 +367,8 @@ async def login(
             status_code=400,
         )
 
-    # ----------------------------------------------------------------
     # Helper: re-render login form with error message on auth failure.
     # Generates a fresh CSRF token so the user can retry.
-    # ----------------------------------------------------------------
     async def render_login_error(error_message: str):
         new_csrf = secrets.token_urlsafe(32)
         display_scopes = scope.split() if scope else client.allowed_scopes
@@ -435,14 +398,12 @@ async def login(
             value=new_csrf,
             httponly=True,
             samesite="strict",
-            secure=False,  # TODO: Set True in production
+            secure=False,  # TODO(deploy): Set True in production (requires HTTPS)
             max_age=600,
         )
         return response
 
-    # ----------------------------------------------------------------
     # Step 3: Re-validate remaining OAuth2 params (tamper protection)
-    # ----------------------------------------------------------------
     if response_type != "code":
         params = urlencode(
             {
@@ -479,10 +440,8 @@ async def login(
         )
         return RedirectResponse(url=f"{redirect_uri}?{params}", status_code=302)
 
-    # ----------------------------------------------------------------
     # Step 4: Authenticate user
     # Generic error prevents email enumeration
-    # ----------------------------------------------------------------
     user: Optional[User] = await User.find_one(User.email == email)
     if not user or not verify_password(password, user.password_hash):
         return await render_login_error("Invalid email or password.")
@@ -493,17 +452,13 @@ async def login(
     if user.deleted_at is not None:
         return await render_login_error("Account has been deleted.")
 
-    # ----------------------------------------------------------------
     # Step 5: Generate authorization code
     # Probability of guessing must be ≤ 2^(-128)
     # secrets.token_urlsafe(32) = 256-bit entropy
-    # ----------------------------------------------------------------
     authorization_code = secrets.token_urlsafe(32)
 
-    # ----------------------------------------------------------------
     # Step 6: Store AuthorizationCode with PKCE challenge
     # TTL: 5 minutes (RFC 6749 §10.5 recommends max 10 minutes)
-    # ----------------------------------------------------------------
     now = datetime.now(timezone.utc)
     auth_code_doc = AuthorizationCode(
         user_id=str(user.id),
@@ -528,17 +483,13 @@ async def login(
             status_code=500,
         )
 
-    # ----------------------------------------------------------------
     # Step 7: Update user's last_login timestamp
-    # ----------------------------------------------------------------
     user.last_login = now
     await user.save()
 
-    # ----------------------------------------------------------------
     # Step 8: 302 redirect to redirect_uri with code + state
     # (RFC 6749 §4.1.2 — Authorization Response)
     # Clear the CSRF cookie — it served its purpose
-    # ----------------------------------------------------------------
     params = urlencode({"code": authorization_code, "state": state})
     response = RedirectResponse(url=f"{redirect_uri}?{params}", status_code=302)
     response.delete_cookie("csrf_token")
@@ -605,18 +556,14 @@ async def token_exchange(
         JSON with access_token, token_type="Bearer", expires_in, refresh_token
     """
 
-    # ----------------------------------------------------------------
     # Step 1: Validate grant_type (RFC 6749 §4.1.3 - REQUIRED)
-    # ----------------------------------------------------------------
     if grant_type != "authorization_code":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=AUTH_ERRORS.unsupported_grant_type.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 2: Lookup authorization code in database
-    # ----------------------------------------------------------------
     auth_code_doc: Optional[AuthorizationCode] = await AuthorizationCode.find_one(
         AuthorizationCode.code == code
     )
@@ -627,12 +574,10 @@ async def token_exchange(
             detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 3: Check if code has already been used (RFC 6749 §4.1.2)
     # If an authorization code is used more than once, this indicates a security breach.
     # The server MUST deny the request and SHOULD revoke all tokens previously issued
     # based on that authorization code.
-    # ----------------------------------------------------------------
     if auth_code_doc.used:
         # CRITICAL: This is a replay attack! Revoke all tokens from this code.
         revoked_count = 0
@@ -663,9 +608,7 @@ async def token_exchange(
             detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 4: Validate code has not expired (5 min TTL)
-    # ----------------------------------------------------------------
     now = datetime.now(timezone.utc)
     if auth_code_doc.expires_at < now:
         raise HTTPException(
@@ -673,29 +616,23 @@ async def token_exchange(
             detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 5: Validate client_id matches
-    # ----------------------------------------------------------------
     if auth_code_doc.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=AUTH_ERRORS.unauthorized_client.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 6: Validate redirect_uri matches
-    # ----------------------------------------------------------------
     if auth_code_doc.redirect_uri != redirect_uri:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=AUTH_ERRORS.invalid_request.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 7: Validate PKCE proof (RFC 7636 §4.5)
     # Verify that SHA256(code_verifier) == stored code_challenge
     # This proves the same entity that requested the code is exchanging it
-    # ----------------------------------------------------------------
     if auth_code_doc.code_challenge_method != "S256":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -709,9 +646,7 @@ async def token_exchange(
             detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 8: Lookup the user who authorized this code
-    # ----------------------------------------------------------------
     user = await User.get(auth_code_doc.user_id)
     if not user:
         raise HTTPException(
@@ -725,9 +660,7 @@ async def token_exchange(
             detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 9: Lookup OAuth2Client to verify it's still active
-    # ----------------------------------------------------------------
     client: Optional[OAuth2Client] = await OAuth2Client.find_one(
         OAuth2Client.client_id == client_id
     )
@@ -737,11 +670,9 @@ async def token_exchange(
             detail=AUTH_ERRORS.unauthorized_client.to_dict(),
         )
 
-    # ----------------------------------------------------------------
     # Step 10: Mark authorization code as USED (RFC 6749 §4.1.2)
     # Keep the code document for replay attack detection instead of deleting immediately.
     # MongoDB TTL index will auto-delete after expiration.
-    # ----------------------------------------------------------------
     try:
         auth_code_doc.used = True
         auth_code_doc.used_at = datetime.now(timezone.utc)
@@ -752,10 +683,8 @@ async def token_exchange(
             detail=AUTH_ERRORS.server_error.to_dict(),
         ) from e
 
-    # ----------------------------------------------------------------
     # Step 11: Generate access token (60 min TTL, HS256, RFC 7519)
     # Includes user_id, email, scopes, jti (token ID for revocation)
-    # ----------------------------------------------------------------
     jwt_service = JWTService()
     access_token = jwt_service.create_access_token(
         str(user.id),
@@ -763,19 +692,15 @@ async def token_exchange(
         scopes=auth_code_doc.scopes,
     )
 
-    # ----------------------------------------------------------------
     # Step 12: Generate refresh token (7 day TTL, HS256, RFC 7519)
     # Used to get new access tokens without re-authenticating
-    # ----------------------------------------------------------------
     refresh_token = jwt_service.create_refresh_token(
         user.id,
         email=user.email,
     )
 
-    # ----------------------------------------------------------------
     # Step 13: Store RefreshToken document for revocation/tracking
     # Includes authorization_code reference for replay attack mitigation
-    # ----------------------------------------------------------------
     # Hash the refresh token (never store plaintext in database)
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     refresh_token_doc = RefreshToken(
@@ -794,14 +719,12 @@ async def token_exchange(
             detail=AUTH_ERRORS.server_error.to_dict(),
         ) from e
 
-    # ----------------------------------------------------------------
     # Step 14: Return token response (RFC 6749 §4.1.4)
     # access_token: JWT token for API requests
     # token_type: "Bearer" per RFC 6750 (OAuth 2.0 Bearer Token)
     # expires_in: Seconds until access_token expires (60 min = 3600 sec)
     # refresh_token: JWT for getting new access_token without re-auth
     # scope: Optional space-delimited list of scopes granted by the token
-    # ----------------------------------------------------------------
     response = TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
