@@ -7,6 +7,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from fastapi import APIRouter, status, HTTPException, Request, Query, Form
+from fastapi.params import Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from ...constants import ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL
@@ -124,8 +125,10 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
 # Traditional OAuth2 flow using server-rendered login form:
 #   1. GET  /authorize  — validate OAuth2 params, render login form
 #   2. POST /login  — authenticate user, issue code, 302 redirect
-#   3. POST /token  — exchange code + PKCE proof for JWT tokens
-#   4. POST /refresh — exchange refresh token for new access token
+#   3. POST /logout — revoke refresh tokens to log out user from all sessions
+#   4. POST /token  — exchange code + PKCE proof for JWT tokens
+#   5. POST /refresh — exchange refresh token for new access token
+#   6. POST /revoke  — revoke a refresh token
 #
 # We use GET to serve the login form (as required by the spec) and POST
 # to process the form submission (credentials never appear in URLs).
@@ -499,6 +502,48 @@ async def login(
 
 
 @router.post(
+    "/logout",
+    summary="Logout (Revoke Refresh Tokens)",
+    description="Revoke all refresh tokens for the authenticated user, effectively logging them out from all sessions.",
+)
+@limiter.limit("5/minute")
+async def logout(request: Request, user: User = Depends(JWTService.get_current_user)):
+    """
+    Logout endpoint.
+
+    Revokes all refresh tokens for the authenticated user, effectively logging them out from all sessions.
+
+    Flow:
+    1. Authenticate user via access token
+    2. Find all active refresh tokens for the user
+    3. Mark each refresh token as revoked with a timestamp
+
+    Returns:
+        JSON message confirming logout
+    """
+
+    # Step 1: Find all active refresh tokens for the user
+    active_tokens = await RefreshToken.find(
+        RefreshToken.user_id == str(user.id), RefreshToken.is_revoked == False
+    ).to_list()
+
+    # Step 2: Revoke each token by setting is_revoked=True and revoked_at timestamp
+    now = datetime.now(timezone.utc)
+    revoked_count = 0
+    for token in active_tokens:
+        token.is_revoked = True
+        token.revoked_at = now
+        await token.save()
+        revoked_count += 1
+
+    return JSONResponse(
+        content={
+            "message": f"Logout successful. Revoked {revoked_count} refresh tokens."
+        }
+    )
+
+
+@router.post(
     "/token",
     summary="OAuth2 Token Endpoint",
     description=(
@@ -749,7 +794,7 @@ async def token_exchange(
     "/refresh",
     summary="Refresh Access Token",
     description=(
-        "Exchange a valid refresh token for a new access token. Validates the refresh token, checks revocation status, and issues a new access token with the same scopes. The refresh token itself is not rotated in this implementation (but can be revoked)."
+        "Exchange a valid refresh token for a new access token. Validates the client, refresh token, checks revocation status, and issues a new access token with the same scopes. The refresh token itself is not rotated in this implementation (but can be revoked)."
     ),
 )
 @limiter.limit("5/minute")
@@ -810,6 +855,68 @@ async def refresh_token(
     return JSONResponse(
         status_code=200,
         content=response.model_dump(),
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+@router.post(
+    "/revoke",
+    summary="Revoke Refresh Token",
+    description=(
+        "Revoke a valid refresh token. Validates the client, refresh token, and revokes the token if valid."
+    ),
+)
+@limiter.limit("5/minute")
+async def revoke_token(
+    request: Request,
+    client_id: str = Form(
+        ..., description="Client ID associated with the refresh token"
+    ),
+    refresh_token: str = Form(
+        ..., description="Refresh token issued by /token endpoint"
+    ),
+):
+    """
+    Revoke Refresh Token Endpoint.
+
+    Validates the client and the provided refresh token and revokes the token if valid.
+    """
+    # Step 1: Validate client_id
+    client: Optional[OAuth2Client] = await OAuth2Client.find_one(
+        OAuth2Client.client_id == client_id
+    )
+    if not client or not client.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AUTH_ERRORS.unauthorized_client.to_dict(),
+        )
+
+    # Step 2: Lookup refresh token in database and validate
+    refresh_token_doc: Optional[RefreshToken] = await RefreshToken.find_one(
+        RefreshToken.token_hash == hashlib.sha256(refresh_token.encode()).hexdigest()
+    )
+    is_expired = (
+        refresh_token_doc.expires_at < datetime.now(timezone.utc)
+        if refresh_token_doc
+        else True
+    )
+    if not refresh_token_doc or refresh_token_doc.is_revoked or is_expired:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AUTH_ERRORS.access_denied.to_dict(),
+        )
+
+    # Step 3: Revoke the refresh token
+    refresh_token_doc.is_revoked = True
+    refresh_token_doc.revoked_at = datetime.now(timezone.utc)
+    await refresh_token_doc.save()
+
+    return JSONResponse(
+        status_code=200,
+        content={"message": "Refresh token revoked successfully"},
         headers={
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
