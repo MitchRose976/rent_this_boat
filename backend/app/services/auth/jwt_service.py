@@ -22,6 +22,7 @@ import jwt
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List
+from fastapi import status, HTTPException, Request
 from app.core.config import settings
 from app.schemas.auth import JwtTokenPayload
 from ...constants import ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL
@@ -205,6 +206,7 @@ class JWTService:
             - Issuer (iss claim matches settings.jwt_issuer)
             - Audience (aud claim matches settings.jwt_audience)
             - Algorithm (must be allowed)
+            - Token type (must be 'access' or 'refresh')
             - Structure (all required claims present and valid)
 
         Args:
@@ -215,7 +217,7 @@ class JWTService:
 
         Raises:
             jwt.ExpiredSignatureError: If token is expired
-            jwt.InvalidTokenError: If token is invalid, tampered, or claims are missing/incorrect
+            jwt.InvalidTokenError: If token is invalid, tampered, claims are missing/incorrect, or token_type is invalid
         """
         try:
             # Decode and verify the JWT with explicit security options
@@ -235,7 +237,15 @@ class JWTService:
 
             # Validate payload structure and convert to typed model
             # Pydantic will raise ValueError if required fields are missing or invalid
-            return JwtTokenPayload(**payload)
+            decoded_payload = JwtTokenPayload(**payload)
+
+            # Validate token_type is one of the expected values
+            if decoded_payload.token_type not in ("access", "refresh"):
+                raise jwt.InvalidTokenError(
+                    f"Invalid token_type '{decoded_payload.token_type}'. Must be 'access' or 'refresh'."
+                )
+
+            return decoded_payload
 
         except jwt.ExpiredSignatureError:
             raise jwt.ExpiredSignatureError("Token has expired")
@@ -294,6 +304,8 @@ class JWTService:
             return True
         except jwt.InvalidTokenError:
             return False  # Invalid but not expired
+
+
 
 
 # Example usage (for testing/learning):

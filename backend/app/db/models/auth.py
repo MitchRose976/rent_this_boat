@@ -164,6 +164,13 @@ class RefreshToken(Document):
         ),
         Indexed(unique=True),
     ]
+    scopes: Annotated[
+        list,
+        Field(
+            default_factory=list,
+            description="List of scopes authorized for this token (used when issuing new access token)",
+        ),
+    ]
     is_revoked: Annotated[
         bool,
         Field(
@@ -210,6 +217,7 @@ class RefreshToken(Document):
                 "user_id": "507f1f77bcf86cd799439011",
                 "authorization_code": "auth_code_abc123xyz789...32chars_minimum",
                 "token_hash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6...",
+                "scopes": ["boats:read", "bookings:write"],
                 "is_revoked": False,
                 "revoked_at": None,
                 "issued_at": "2026-01-24T10:00:00Z",

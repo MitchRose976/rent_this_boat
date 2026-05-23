@@ -17,6 +17,7 @@ from ...services.auth.utils import hash_password, verify_password
 from ...services.auth.password_service import PasswordValidator
 from ...services.auth.jwt_service import JWTService
 from ...services.auth.pkce import verify_code_challenge
+from ...dependencies.auth import get_current_user
 from ...schemas.auth import (
     ErrorResponse,
     RegisterRequest,
@@ -507,7 +508,7 @@ async def login(
     description="Revoke all refresh tokens for the authenticated user, effectively logging them out from all sessions.",
 )
 @limiter.limit("5/minute")
-async def logout(request: Request, user: User = Depends(JWTService.get_current_user)):
+async def logout(request: Request, user: User = Depends(get_current_user)):
     """
     Logout endpoint.
 
@@ -539,7 +540,11 @@ async def logout(request: Request, user: User = Depends(JWTService.get_current_u
     return JSONResponse(
         content={
             "message": f"Logout successful. Revoked {revoked_count} refresh tokens."
-        }
+        },
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
     )
 
 
@@ -730,7 +735,7 @@ async def token_exchange(
             detail=AUTH_ERRORS.server_error.to_dict(),
         ) from e
 
-    # Step 11: Generate access token (60 min TTL, HS256, RFC 7519)
+    # Step 11: Generate access token (15 min TTL, HS256, RFC 7519)
     # Includes user_id, email, scopes, jti (token ID for revocation)
     jwt_service = JWTService()
     access_token = jwt_service.create_access_token(
@@ -742,7 +747,7 @@ async def token_exchange(
     # Step 12: Generate refresh token
     # Used to get new access tokens without re-authenticating
     refresh_token = jwt_service.create_refresh_token(
-        user.id,
+        str(user.id),
         email=user.email,
     )
 
@@ -754,6 +759,7 @@ async def token_exchange(
         user_id=str(user.id),
         authorization_code=auth_code_doc.code,  # Track which code generated this token
         token_hash=token_hash,
+        scopes=auth_code_doc.scopes,  # Cache scopes for new access token issuance
         issued_at=now,
         expires_at=now + timedelta(days=REFRESH_TOKEN_TTL["DAYS"]),
     )
@@ -837,11 +843,19 @@ async def refresh_token(
             detail=AUTH_ERRORS.access_denied.to_dict(),
         )
 
-    # Step 3: Issue new access token
+    # Step 3: Lookup user for fresh data (email, active status, deletion status)
+    user: Optional[User] = await User.get(refresh_token_doc.user_id)
+    if not user or not user.is_active or user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AUTH_ERRORS.access_denied.to_dict(),
+        )
+
+    # Step 4: Issue new access token
     jwt_service = JWTService()
     access_token = jwt_service.create_access_token(
         user_id=refresh_token_doc.user_id,
-        email=refresh_token_doc.email,
+        email=user.email,
         scopes=refresh_token_doc.scopes,
     )
 
@@ -866,7 +880,8 @@ async def refresh_token(
     "/revoke",
     summary="Revoke Refresh Token",
     description=(
-        "Revoke a valid refresh token. Validates the client, refresh token, and revokes the token if valid."
+        "Revoke a valid refresh token. Validates the client and revokes the token if valid. "
+        "Returns 200 OK for all requests (RFC 7009 §2.2) to prevent token probing attacks."
     ),
 )
 @limiter.limit("5/minute")
@@ -880,43 +895,43 @@ async def revoke_token(
     ),
 ):
     """
-    Revoke Refresh Token Endpoint.
+    Revoke Refresh Token Endpoint (RFC 7009).
 
-    Validates the client and the provided refresh token and revokes the token if valid.
+    Revokes a refresh token if valid. Per RFC 7009 §2.2, always returns 200 OK
+    to prevent attackers from probing whether a token is valid.
     """
-    # Step 1: Validate client_id
+    # Step 1: Validate client_id (silently ignore if invalid per RFC 7009)
     client: Optional[OAuth2Client] = await OAuth2Client.find_one(
         OAuth2Client.client_id == client_id
     )
     if not client or not client.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=AUTH_ERRORS.unauthorized_client.to_dict(),
+        # Per RFC 7009 §2.2: still return 200 to prevent token probing
+        return JSONResponse(
+            status_code=200,
+            content={"message": "The token has been revoked"},
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
         )
 
-    # Step 2: Lookup refresh token in database and validate
+    # Step 2: Lookup refresh token in database by hash
     refresh_token_doc: Optional[RefreshToken] = await RefreshToken.find_one(
         RefreshToken.token_hash == hashlib.sha256(refresh_token.encode()).hexdigest()
     )
-    is_expired = (
-        refresh_token_doc.expires_at < datetime.now(timezone.utc)
-        if refresh_token_doc
-        else True
-    )
-    if not refresh_token_doc or refresh_token_doc.is_revoked or is_expired:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=AUTH_ERRORS.access_denied.to_dict(),
-        )
 
-    # Step 3: Revoke the refresh token
-    refresh_token_doc.is_revoked = True
-    refresh_token_doc.revoked_at = datetime.now(timezone.utc)
-    await refresh_token_doc.save()
+    # Step 3: Revoke if found and not already revoked/expired
+    if refresh_token_doc:
+        is_expired = refresh_token_doc.expires_at < datetime.now(timezone.utc)
+        if not refresh_token_doc.is_revoked and not is_expired:
+            refresh_token_doc.is_revoked = True
+            refresh_token_doc.revoked_at = datetime.now(timezone.utc)
+            await refresh_token_doc.save()
 
+    # Step 4: Always return 200 OK (RFC 7009 §2.2)
     return JSONResponse(
         status_code=200,
-        content={"message": "Refresh token revoked successfully"},
+        content={"message": "The token has been revoked"},
         headers={
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
