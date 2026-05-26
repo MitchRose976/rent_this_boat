@@ -81,10 +81,14 @@ JWT_SECRET_KEY=your_secret_key_minimum_32_bytes_long
 ### Quick Start (Recommended)
 
 ```bash
+# Linux / macOS
+./start.sh
+
+# Windows
 ./start.bat
 ```
 
-This batch script will:
+This script will:
 
 - Clean up any orphaned processes
 - Create/verify the virtual environment
