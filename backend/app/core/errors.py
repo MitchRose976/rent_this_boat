@@ -35,6 +35,10 @@ class AuthErrors:
             "unsupported_response_type",
             "The authorization server does not support obtaining an authorization code using this method.",
         )
+        self.unsupported_grant_type = ErrorInfo(
+            "unsupported_grant_type",
+            "The authorization grant type is not supported by the authorization server.",
+        )
         self.invalid_scope = ErrorInfo(
             "invalid_scope",
             "The requested scope is invalid, unknown, or malformed.",
@@ -54,6 +58,7 @@ class AuthErrors:
             "unauthorized_client": self.unauthorized_client,
             "access_denied": self.access_denied,
             "unsupported_response_type": self.unsupported_response_type,
+            "unsupported_grant_type": self.unsupported_grant_type,
             "invalid_scope": self.invalid_scope,
             "server_error": self.server_error,
             "temporarily_unavailable": self.temporarily_unavailable,
