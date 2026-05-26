@@ -61,6 +61,11 @@ MONGO_DB_PASSWORD=your_db_password
 APP_NAME=Rent This Boat API
 ADMIN_EMAIL=admin@rentthisboat.com
 ITEMS_PER_USER=50
+APP_ENV=development
+FORCE_HTTPS=false
+
+# JWT Configuration
+JWT_SECRET_KEY=your_secret_key_minimum_32_bytes_long
 ```
 
 **Get your MongoDB URI:**
@@ -96,9 +101,9 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 Once running, the API will be available at:
 
-- **API Base**: http://127.0.0.1:8000
-- **Swagger UI**: http://127.0.0.1:8000/docs
-- **ReDoc**: http://127.0.0.1:8000/redoc
+- **API Base**: http://127.0.0.1:8000/api/v1
+- **Swagger UI**: http://127.0.0.1:8000/api/v1/docs
+- **ReDoc**: http://127.0.0.1:8000/api/v1/redoc
 
 ## Development
 
@@ -151,8 +156,9 @@ Press `Ctrl+C` in the terminal to gracefully stop the server.
 
 The startup script automatically cleans up orphaned processes on port 8000. If issues persist:
 
-```powershell
-Get-NetTCPConnection -LocalPort 8000 | Stop-Process -Force
+```bash
+# Linux / macOS
+fuser -k 8000/tcp
 ```
 
 ### Virtual Environment Issues
@@ -160,16 +166,17 @@ Get-NetTCPConnection -LocalPort 8000 | Stop-Process -Force
 Delete and recreate the virtual environment:
 
 ```bash
-rmdir /s .venv
-py -3.11 -m venv .venv
+# Linux / macOS
+rm -rf .venv
+python3.11 -m venv .venv
 ```
 
 ## API Documentation
 
 Once the server is running, interactive API documentation is available at:
 
-- **Swagger UI**: http://127.0.0.1:8000/docs
-- **Alternative (ReDoc)**: http://127.0.0.1:8000/redoc
+- **Swagger UI**: http://127.0.0.1:8000/api/v1/docs
+- **Alternative (ReDoc)**: http://127.0.0.1:8000/api/v1/redoc
 
 ## Contact
 
