@@ -65,7 +65,9 @@ class JWTService:
         Note:
             For distributed systems, consider RS256 (public/private key) for cross-service verification.
         """
-        self.secret_key = secret_key or settings.jwt_secret_key
+        self.secret_key = (
+            secret_key if secret_key is not None else settings.jwt_secret_key
+        )
         self.algorithm = algorithm or "HS256"
         self.access_token_expire_minutes = (
             access_token_expire_minutes or ACCESS_TOKEN_TTL["MINUTES"]
@@ -304,8 +306,6 @@ class JWTService:
             return True
         except jwt.InvalidTokenError:
             return False  # Invalid but not expired
-
-
 
 
 # Example usage (for testing/learning):

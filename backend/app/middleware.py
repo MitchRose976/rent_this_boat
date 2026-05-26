@@ -30,7 +30,7 @@ def configure_middleware(app: FastAPI):
         TrustedHostMiddleware,
         # TODO(deploy): add production API hostnames here (NO scheme, NO path),
         # e.g. ["api.rentthisboat.com", "rentthisboat.com"].
-        allowed_hosts=["localhost", "127.0.0.1", "::1"],
+        allowed_hosts=["localhost", "127.0.0.1", "::1", "testserver"],
     )
 
     # 3. Protocol-aware HTTPS redirect middleware

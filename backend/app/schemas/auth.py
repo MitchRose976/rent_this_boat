@@ -161,7 +161,10 @@ class TokenResponse(BaseModel):
     """Schema for token response."""
 
     access_token: str = Field(description="JWT access token")
-    refresh_token: str = Field(description="JWT refresh token")
+    refresh_token: Optional[str] = Field(
+        default=None,
+        description="JWT refresh token (only returned on initial token exchange, not on refresh)",
+    )
     token_type: str = Field(
         default="bearer",
         description="Token type (should be 'bearer')",
