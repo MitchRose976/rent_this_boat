@@ -5,7 +5,7 @@ from datetime import datetime, date, timezone
 from typing import Optional
 from enum import Enum
 
-from .address import Address, CountryCode
+from ...schemas import Address
 
 
 class UserRole(str, Enum):
@@ -49,7 +49,14 @@ class User(Document):
         Indexed(),
     ]
     last_login: Annotated[
-        Optional[datetime], Field(description="Last login timestamp")
+        Optional[datetime],
+        Field(description="Last login timestamp"),
+        Indexed(),
+    ] = None
+    deleted_at: Annotated[
+        Optional[datetime],
+        Field(description="Soft delete timestamp. Null means user is not deleted."),
+        Indexed(),
     ] = None
 
     # Profile information
@@ -90,6 +97,7 @@ class User(Document):
                 "created_at": "2023-01-01T12:00:00Z",
                 "updated_at": "2023-01-01T12:00:00Z",
                 "last_login": "2023-01-10T08:30:00Z",
+                "deleted_at": None,
                 "phone": "416-555-1234",
                 "date_of_birth": "1990-05-15",
                 "profile_picture_url": "https://example.com/profiles/jdoe.jpg",
@@ -113,8 +121,8 @@ class User(Document):
     class Settings:
         name = "users"  # Collection name in MongoDB
         indexes = [
-            [("is_active", 1), ("is_verified", 1)]
-        ]  # Compound/Composite index for active and verified users - avoids separate queries
+            [("is_active", 1), ("is_verified", 1), ("deleted_at", 1)]
+        ]  # Compound index for filtering active, verified, and non-deleted users
 
     def __str__(self):
         return f"User(email={self.email}, name={self.first_name} {self.last_name})"

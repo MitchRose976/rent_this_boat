@@ -3,28 +3,9 @@ from beanie import Document, Indexed
 from pydantic import Field, ConfigDict
 from datetime import datetime, timezone
 from typing import Optional
-from enum import Enum
-
 from .boat import Boat
-from .address import Address
-
-
-class BoatType(str, Enum):
-    SAILBOAT = "sailboat"
-    MOTORBOAT = "motorboat"
-    YACHT = "yacht"
-    KAYAK = "kayak"
-    CANOE = "canoe"
-    CATAMARAN = "catamaran"
-    SPEEDBOAT = "speedboat"
-    FISHING_BOAT = "fishing_boat"
-    OTHER = "other"
-
-
-class PostingStatus(str, Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    ARCHIVED = "archived"
+from ...schemas.address import Address
+from ...schemas.posting import PostingStatus
 
 
 class Posting(Document):

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorization Error – Rent This Boat</title>
+    <style>
+        /* ============================================================
+         * Error page for non-redirectable OAuth2 errors
+         * Shown when client_id or redirect_uri is invalid, so we
+         * MUST NOT redirect per RFC 6749 §3.1.2.4
+         * ============================================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                         "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f4f8;
+            color: #1a202c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            max-width: 420px;
+            width: 100%;
+            padding: 2.5rem 2rem;
+            text-align: center;
+        }
+
+        .brand h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2b6cb0;
+            margin-bottom: 1.5rem;
+        }
+
+        .error-box {
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+            border-radius: 8px;
+            padding: 1.25rem 1rem;
+        }
+
+        .error-box h2 {
+            font-size: 1.125rem;
+            color: #c53030;
+            margin-bottom: 0.75rem;
+        }
+
+        .error-code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.8125rem;
+            background: #fed7d7;
+            color: #9b2c2c;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 0.75rem;
+        }
+
+        .error-detail {
+            font-size: 0.875rem;
+            color: #742a2a;
+            line-height: 1.5;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="brand">
+            <h1>⛵ Rent This Boat</h1>
+        </div>
+
+        <div class="error-box">
+            <h2>Authorization Error</h2>
+            <div class="error-code">{{ error }}</div>
+            <p class="error-detail">{{ detail }}</p>
+        </div>
+
+        <div class="footer">
+            Rent This Boat Authorization Server
+        </div>
+    </div>
+</body>
+</html>
