@@ -87,6 +87,28 @@ class ErrorResponse(BaseModel):
     }
 
 
+class CurrentUserResponse(BaseModel):
+    """Schema for current user information response."""
+
+    id: str
+    email: str
+    first_name: str
+    last_name: str
+    role: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": "507f1f77bcf86cd799439011",
+                "email": "john.doe@example.com",
+                "first_name": "John",
+                "last_name": "Doe",
+                "role": "customer",
+            }
+        }
+    }
+
+
 # ============================================================================
 # JWT Token Payload Model
 # ============================================================================
