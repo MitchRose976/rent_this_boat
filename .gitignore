@@ -1,97 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # =============================================================================
-# FRONTEND (Next.js)
+# MONOREPO GITIGNORE
+# Root-level ignore file for frontend and backend.
 # =============================================================================
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# docs
-/docs
-
-# =============================================================================
-# BACKEND (Python/FastAPI)
-# =============================================================================
-
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
-backend/.venv/
-backend/venv/
-
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Python package distributions
-*.egg-info/
-build/
-dist/
-*.egg
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Type checking & linting
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# IDE & Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Environment variables
-backend/.env
-backend/.env.local
 
 # =============================================================================
 # COMMON
@@ -99,27 +9,87 @@ backend/.env.local
 
 .DS_Store
 *.log
+*.pem
 
+# IDE and editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Python package distributions
-*.egg-info/
-build/
-dist/
-*.egg
+# =============================================================================
+# FRONTEND (Next.js) - frontend/
+# =============================================================================
 
-# Python virtual environments
-.venv/
-venv/
-env/
-**/.venv/
+# Dependencies
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.*
+frontend/.yarn/*
+!frontend/.yarn/patches
+!frontend/.yarn/plugins
+!frontend/.yarn/releases
+!frontend/.yarn/versions
 
-# pytest and testing
-.pytest_cache/
-.coverage
-htmlcov/
+# Build artifacts
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/coverage/
 
-# Type checking
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Environment files
+frontend/.env*
+
+# Vercel
+frontend/.vercel/
+
+# TypeScript generated files
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# =============================================================================
+# BACKEND (Python/FastAPI) - backend/
+# =============================================================================
+
+# Virtual environments
+backend/.venv/
+backend/venv/
+backend/env/
+backend/ENV/
+
+# Python caches and artifacts
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.py[cod]
+backend/**/*.py[cod]
+backend/*$py.class
+backend/**/*$py.class
+backend/*.so
+backend/**/*.so
+
+# Python packaging
+backend/*.egg-info/
+backend/build/
+backend/dist/
+backend/*.egg
+
+# Testing and type checking
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.tox/
+backend/.mypy_cache/
+backend/.dmypy.json
+backend/dmypy.json
+
+# Environment files
+backend/.env
+backend/.env.local
+
+# =============================================================================
+# OPTIONAL PROJECT DOCS
+# =============================================================================
+
+/docs
 
