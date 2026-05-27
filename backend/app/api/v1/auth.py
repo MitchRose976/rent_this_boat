@@ -23,6 +23,7 @@ from ...schemas.auth import (
     RegisterRequest,
     RegisterResponse,
     TokenResponse,
+    CurrentUserResponse,
 )
 from ...db.models.user import User
 from ...db.models.auth import AuthorizationCode, OAuth2Client, RefreshToken
@@ -117,6 +118,31 @@ async def register(request: Request, request_body: RegisterRequest) -> RegisterR
         email=new_user.email,
         first_name=new_user.first_name,
         last_name=new_user.last_name,
+    )
+
+
+@router.get(
+    "/me",
+    response_model=CurrentUserResponse,
+    summary="Get current user",
+    description="Returns the profile of the currently authenticated user.",
+)
+async def get_current_user_profile(
+    user: User = Depends(get_current_user),
+) -> CurrentUserResponse:
+    """
+    Get current user profile.
+
+    Requires a valid access token in the Authorization header.
+
+    Returns the user's profile information.
+    """
+    return CurrentUserResponse(
+        id=str(user.id),
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
     )
 
 
